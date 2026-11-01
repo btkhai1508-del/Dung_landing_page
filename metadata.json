@@ -1,0 +1,8 @@
+{
+  "name": "Remix TRUNG DUNG LANDING PAGE",
+  "description": "DUNG GIEO HAT LANDIGN PAGE",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
