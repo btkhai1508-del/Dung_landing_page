@@ -6,7 +6,7 @@ interface RegisterModalProps {
   onSuccess?: () => void;
 }
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBSUB_UKWpZdeJXmNEk-Xjq1CN10bykbJTb_mhFa9dH_Nu6OqIzM9hFJAq2MH772xoBA/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVvzC75rDJbWAJ-J-xHxG34x0MAsrJvvFAfnNKh_0PVN7YfqK9y1ttFKYHoZtKYzVghA/exec';
 
 export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [name, setName] = useState('');

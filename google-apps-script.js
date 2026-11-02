@@ -51,10 +51,10 @@ function doPost(e) {
 
     const timestamp = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 
-    // 2. Ghi thông tin vào Google Sheet
+    // 2. Ghi thông tin vào Google Sheet (Trang tính đầu tiên)
     try {
       const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      const sheet = ss.getActiveSheet();
+      const sheet = ss.getSheets()[0] || ss.getActiveSheet();
       
       // Nếu sheet trống, tự động thêm hàng tiêu đề chuẩn theo Sheet của bạn
       if (sheet.getLastRow() === 0) {
