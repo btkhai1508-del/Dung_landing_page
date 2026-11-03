@@ -75,10 +75,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
           <span className="text-xs font-bold tracking-widest text-[#FA5B13] uppercase">
             DŨNG GIEO HẠT · ĐĂNG KÝ MIỄN PHÍ
           </span>
-          <h2 className="font-['Space_Grotesk'] font-extrabold text-[22px] sm:text-[28px] leading-[28px] sm:leading-[34px] text-black tracking-tight uppercase text-center mt-1">
-            <span className="block">BỘ QUÀ TẶNG ĐỔI ĐỜI &</span>
-            <span className="block text-[#FA5B13]">THAY ĐỔI TƯƠNG LAI</span>
-            <span className="block">KHÔNG CHỈ LÀ SỐ PHẬN</span>
+          <h2 className="font-['Space_Grotesk'] font-extrabold text-[18px] sm:text-[22px] leading-[25px] sm:leading-[30px] text-black tracking-tight uppercase text-center mt-1.5 [text-wrap:balance]">
+            <span className="block">BỘ QUÀ TẶNG ĐỔI ĐỜI & THAY ĐỔI TƯƠNG LAI</span>
+            <span className="block text-[#FA5B13] mt-0.5">KHÔNG CHỈ LÀ SỐ PHẬN</span>
           </h2>
         </div>
 

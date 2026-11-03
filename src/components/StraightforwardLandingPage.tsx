@@ -8,11 +8,18 @@ import {
 } from 'lucide-react';
 import { RegisterModal } from './RegisterModal';
 import { FigmaReferenceModal } from './FigmaReferenceModal';
+import { ThankYouPage } from './ThankYouPage';
 
 export const StraightforwardLandingPage: React.FC = () => {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [isFigmaModalOpen, setIsFigmaModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isThankYouOpen, setIsThankYouOpen] = useState(false);
+
+  // If user completed registration, render the dedicated Thank You Page
+  if (isThankYouOpen) {
+    return <ThankYouPage onBackToHome={() => setIsThankYouOpen(false)} />;
+  }
 
   const headingClass = 'font-playfair-heading italic font-medium';
 
@@ -158,10 +165,9 @@ export const StraightforwardLandingPage: React.FC = () => {
                 KIẾN THỨC · TRẢI NGHIỆM · ỨNG DỤNG · THAY ĐỔI CUỘC SỐNG
               </div>
 
-              <h1 className={`text-4xl sm:text-5xl lg:text-6xl ${headingClass} leading-[1.28] text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]`}>
-                Bạn Có Thể <br />
-                <span className="text-[#FFAB76] underline decoration-white/30">Thay Đổi Tương Lai</span> <br />
-                Không Chỉ Là Số Phận
+              <h1 className={`text-3xl sm:text-4xl lg:text-5xl ${headingClass} leading-[1.25] text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)] [text-wrap:balance]`}>
+                <span className="block">Bạn Có Thể Thay Đổi Tương Lai</span>
+                <span className="block text-[#FFAB76] mt-1 underline decoration-white/30">Không Chỉ Là Số Phận</span>
               </h1>
 
               <p className="text-base sm:text-lg text-gray-200 leading-relaxed font-be-vietnam max-w-xl">
@@ -169,7 +175,7 @@ export const StraightforwardLandingPage: React.FC = () => {
               </p>
 
               {/* Handwritten Quote */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-black/40 backdrop-blur-md border border-white/20 text-white text-xl sm:text-2xl font-caveat leading-snug shadow-lg italic">
+              <div className="p-4 sm:p-5 rounded-2xl bg-black/40 backdrop-blur-md border border-white/20 text-[#FFA877] text-2xl sm:text-3xl font-dancing-script font-bold leading-snug shadow-lg text-center sm:text-left">
                 “Tương lai không được dự đoán, tương lai được tạo ra bởi những gì bạn làm hôm nay.”
               </div>
 
@@ -585,7 +591,7 @@ export const StraightforwardLandingPage: React.FC = () => {
           />
 
           <div className="max-w-4xl mx-auto text-center space-y-8 relative z-10">
-            <h2 className={`text-3xl sm:text-5xl lg:text-6xl font-bold tracking-normal leading-snug text-white max-w-3xl mx-auto ${headingClass}`}>
+            <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-bold tracking-normal leading-snug text-white max-w-3xl mx-auto ${headingClass} [text-wrap:balance]`}>
               “Mỗi ngày là một lựa chọn, và bạn luôn có quyền thay đổi cuộc đời mình!”
             </h2>
 
@@ -649,6 +655,7 @@ export const StraightforwardLandingPage: React.FC = () => {
         onClose={() => setIsRegisterOpen(false)}
         onSuccess={() => {
           setIsRegisterOpen(false);
+          setIsThankYouOpen(true);
         }}
       />
 
