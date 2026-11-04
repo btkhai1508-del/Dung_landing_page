@@ -191,7 +191,13 @@ export const FamilyHappinessMap: React.FC = () => {
 
   // Khởi tạo và phát nhạc Piano thiền chill thực thụ
   useEffect(() => {
-    const audio = new Audio('/audio/meditation-piano.mp3');
+    // Đảm bảo đường dẫn luôn khớp dù deploy lên Render root domain hay subfolder
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    // Nhạc thiền 432Hz thư giãn sâu, sóng não Theta, chuông xoay Tây Tạng
+    const audioUrl = `${cleanBase}audio/meditation-432hz.mp3`;
+
+    const audio = new Audio(audioUrl);
     audio.loop = true;
     audio.volume = VOLUME_VALUES.medium;
     audioRef.current = audio;
@@ -333,14 +339,41 @@ export const FamilyHappinessMap: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      // Lưu thông tin form bando vào Tabs sheet "Quà Tặng Tầng 1" theo đúng yêu cầu
       const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVvzC75rDJbWAJ-J-xHxG34x0MAsrJvvFAfnNKh_0PVN7YfqK9y1ttFKYHoZtKYzVghA/exec';
+      const targetSheet = 'Quà Tặng Tầng 1';
+      const targetUrl = `${GOOGLE_SCRIPT_URL}?sheet=${encodeURIComponent(targetSheet)}&tab=${encodeURIComponent(targetSheet)}`;
+
       const formDataToSend = new URLSearchParams();
       formDataToSend.append('name', formData.fullName.trim());
+      formDataToSend.append('fullName', formData.fullName.trim());
       formDataToSend.append('phone', formData.phone.trim());
       formDataToSend.append('email', formData.email.trim());
-      formDataToSend.append('type', 'BAN_DO_HANH_PHUC_GIA_DINH');
+      formDataToSend.append('birthDate', formData.birthDate);
+      formDataToSend.append('birthTime', formData.birthTime || 'Không rõ');
+      formDataToSend.append('gender', formData.gender);
+      formDataToSend.append('city', formData.city.trim());
+      formDataToSend.append('occupation', formData.occupation.trim());
+      formDataToSend.append('familyTime', formData.familyTime);
+      formDataToSend.append('priorityArea', formData.priorityArea);
+      formDataToSend.append('desireChange', formData.desireChange.trim());
+      formDataToSend.append('obstacles', formData.obstacles.join(', '));
+      formDataToSend.append('supportMethods', formData.supportMethods.join(', '));
+      formDataToSend.append('deliveryChannels', formData.deliveryChannels.join(', '));
+      formDataToSend.append(
+        'relatives',
+        formData.relatives.map((r) => `${r.name} (${r.relationship}, ${r.birthDate})`).join('; ')
+      );
+      formDataToSend.append('sheet', targetSheet);
+      formDataToSend.append('sheetName', targetSheet);
+      formDataToSend.append('tab', targetSheet);
+      formDataToSend.append('tabName', targetSheet);
+      formDataToSend.append('targetSheet', targetSheet);
+      formDataToSend.append('type', targetSheet);
+      formDataToSend.append('formType', 'BAN_DO_HANH_PHUC');
+      formDataToSend.append('timestamp', new Date().toLocaleString('vi-VN'));
 
-      await fetch(GOOGLE_SCRIPT_URL, {
+      await fetch(targetUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: {

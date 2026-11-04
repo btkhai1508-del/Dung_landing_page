@@ -261,7 +261,7 @@ export const StraightforwardLandingPage: React.FC = () => {
                 </span>
               </div>
               <h2 className={`text-3xl sm:text-5xl font-bold text-gray-900 leading-snug ${headingClass}`}>
-                Những Quy Luật Vận Hành Của Vũ TrỤ Ảnh Hưởng Đến Bạn
+                Những Quy Luật Vận Hành Của Vũ trụ Ảnh Hưởng Đến Bạn
               </h2>
               <p className="text-gray-600 mt-2 text-base font-be-vietnam">
                 Khi hiểu và ứng dụng các quy luật này, bạn có thể chủ động thay đổi vận mệnh thay vì bị động chờ đợi.

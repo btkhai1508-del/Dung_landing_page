@@ -24,13 +24,24 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
     setIsSubmitting(true);
 
     try {
-      // Gửi dữ liệu theo chuẩn URLSearchParams (Form Data) để Google Apps Script nhận 100% không bị CORS hay null
+      // Gửi dữ liệu vào tab sheet "THÔNG TIN" của Google Sheets theo yêu cầu
+      const targetSheet = 'THÔNG TIN';
+      const targetUrl = `${GOOGLE_SCRIPT_URL}?sheet=${encodeURIComponent(targetSheet)}&tab=${encodeURIComponent(targetSheet)}`;
+
       const formData = new URLSearchParams();
       formData.append('name', name.trim());
       formData.append('phone', phone.trim());
       formData.append('email', email.trim());
+      formData.append('sheet', targetSheet);
+      formData.append('sheetName', targetSheet);
+      formData.append('tab', targetSheet);
+      formData.append('tabName', targetSheet);
+      formData.append('targetSheet', targetSheet);
+      formData.append('type', targetSheet);
+      formData.append('formType', 'QUA_TANG_MIEN_PHI');
+      formData.append('timestamp', new Date().toLocaleString('vi-VN'));
 
-      await fetch(GOOGLE_SCRIPT_URL, {
+      await fetch(targetUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: {
