@@ -26,6 +26,79 @@
   line-height: 1.25;
 }
 
+/* ==========================================================
+   HỆ THỐNG CHỮ TRANG AFFILIATE
+   - Tiêu đề: Playfair Display đứng, số cao bằng chữ (lining)
+   - Chữ càng to giãn càng ít (optical tracking): 3% → 6%
+   - Line-height đủ rộng cho dấu tiếng Việt chồng tầng (Ấ, Ễ, Ỗ)
+   - Nhãn VIẾT HOA chỉ dùng cho chữ nhỏ, giãn rộng 14%
+   ========================================================== */
+.type-display,
+.type-h2,
+.type-h3,
+.type-statement,
+.type-figure,
+.type-brand {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: normal;
+  font-variant-numeric: lining-nums;
+  font-feature-settings: 'lnum' 1;
+}
+
+/* H1 – tiêu đề chính trang */
+.type-display {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.22;
+}
+
+/* H2 – tiêu đề mục lớn */
+.type-h2 {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+}
+
+/* H3 – tiêu đề bài học, quà tặng, mục con */
+.type-h3 {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.35;
+}
+
+/* Câu chuyển ý / trích dẫn lớn – nhẹ hơn tiêu đề */
+.type-statement {
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+}
+
+/* Số thứ tự lớn, đồng hồ, giá trị */
+.type-figure {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+}
+
+/* Logo chữ */
+.type-brand {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+/* Nhãn nhỏ VIẾT HOA */
+.type-label {
+  font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  line-height: 1.5;
+}
+
 .font-playfair-italic {
   font-family: 'Playfair Display', Georgia, serif;
   font-style: italic;

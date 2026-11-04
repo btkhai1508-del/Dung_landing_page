@@ -6,9 +6,13 @@
 import React, { useState, useEffect } from 'react';
 import { StraightforwardLandingPage } from './components/StraightforwardLandingPage';
 import { FamilyHappinessMap } from './components/FamilyHappinessMap';
+import { AffiliateLandingPage } from './components/AffiliateLandingPage';
+import { AffiliateHomePage } from './components/AffiliateHomePage';
+
+type Route = 'home' | 'bando' | 'affiliate' | 'affiliate-home';
 
 // Hàm kiểm tra route độc lập theo link URL
-function getRouteFromLocation(): 'home' | 'bando' {
+function getRouteFromLocation(): Route {
   if (typeof window === 'undefined') return 'home';
   const path = window.location.pathname.toLowerCase();
   const search = window.location.search.toLowerCase();
@@ -29,11 +33,24 @@ function getRouteFromLocation(): 'home' | 'bando' {
     search.includes('page=bando') ||
     search.includes('form=bando');
 
-  return isBando ? 'bando' : 'home';
+  if (isBando) return 'bando';
+
+  // Trang đích sau khi đăng ký Thử thách Affiliate: /home
+  if (path === '/home' || path.startsWith('/home/')) return 'affiliate-home';
+
+  // Nhận diện link Thử Thách 2 Ngày Affiliate:
+  // Path: /affiliate, /thu-thach · Hash: #affiliate · Query: ?affiliate, ?page=affiliate
+  const isAffiliate =
+    path.includes('/affiliate') ||
+    path.includes('/thu-thach') ||
+    hash.includes('affiliate') ||
+    search.includes('affiliate');
+
+  return isAffiliate ? 'affiliate' : 'home';
 }
 
 export default function App() {
-  const [currentRoute, setCurrentRoute] = useState<'home' | 'bando'>(getRouteFromLocation);
+  const [currentRoute, setCurrentRoute] = useState<Route>(getRouteFromLocation);
 
   useEffect(() => {
     const handleLocationChange = () => {
@@ -51,8 +68,16 @@ export default function App() {
 
   return (
     <div className="w-full min-h-screen">
-      {/* Hai trang tách biệt hoàn toàn độc lập, hiển thị chính xác theo link URL */}
-      {currentRoute === 'bando' ? <FamilyHappinessMap /> : <StraightforwardLandingPage />}
+      {/* Các trang tách biệt hoàn toàn độc lập, hiển thị chính xác theo link URL */}
+      {currentRoute === 'bando' ? (
+        <FamilyHappinessMap />
+      ) : currentRoute === 'affiliate' ? (
+        <AffiliateLandingPage />
+      ) : currentRoute === 'affiliate-home' ? (
+        <AffiliateHomePage />
+      ) : (
+        <StraightforwardLandingPage />
+      )}
     </div>
   );
 }

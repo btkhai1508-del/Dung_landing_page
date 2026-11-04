@@ -4,11 +4,30 @@ interface RegisterModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  // Tùy biến nội dung popup cho từng landing page (mặc định: trang Dũng Gieo Hạt)
+  eyebrow?: string;
+  title?: string;
+  highlight?: string;
+  subtitle?: string;
+  submitLabel?: string;
+  successMessage?: string;
+  formType?: string;
 }
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVvzC75rDJbWAJ-J-xHxG34x0MAsrJvvFAfnNKh_0PVN7YfqK9y1ttFKYHoZtKYzVghA/exec';
 
-export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const RegisterModal: React.FC<RegisterModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  eyebrow = 'DŨNG GIEO HẠT · ĐĂNG KÝ MIỄN PHÍ',
+  title = 'BỘ QUÀ TẶNG ĐỔI ĐỜI & THAY ĐỔI TƯƠNG LAI',
+  highlight = 'KHÔNG CHỈ LÀ SỐ PHẬN',
+  subtitle = 'Điền thông tin của bạn xuống dưới để nhận trọn bộ Ebook, tài liệu & kích hoạt vé giữ chỗ miễn phí:',
+  submitLabel = 'GỬI BỘ QUÀ TẶNG & VÉ MIỄN PHÍ CHO TÔI',
+  successMessage = '✓ Đã giữ chỗ thành công! Bộ quà tặng và vé đang được chuyển tiếp tới bạn.',
+  formType = 'QUA_TANG_MIEN_PHI',
+}) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -38,7 +57,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
       formData.append('tabName', targetSheet);
       formData.append('targetSheet', targetSheet);
       formData.append('type', targetSheet);
-      formData.append('formType', 'QUA_TANG_MIEN_PHI');
+      formData.append('formType', formType);
       formData.append('timestamp', new Date().toLocaleString('vi-VN'));
 
       await fetch(targetUrl, {
@@ -84,17 +103,17 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
         {/* Title: Căn giữa */}
         <div className="flex flex-col gap-1 text-center pt-2">
           <span className="text-xs font-bold tracking-widest text-[#FA5B13] uppercase">
-            DŨNG GIEO HẠT · ĐĂNG KÝ MIỄN PHÍ
+            {eyebrow}
           </span>
-          <h2 className="font-['Space_Grotesk'] font-extrabold text-[18px] sm:text-[22px] leading-[25px] sm:leading-[30px] text-black tracking-tight uppercase text-center mt-1.5 [text-wrap:balance]">
-            <span className="block">BỘ QUÀ TẶNG ĐỔI ĐỜI & THAY ĐỔI TƯƠNG LAI</span>
-            <span className="block text-[#FA5B13] mt-0.5">KHÔNG CHỈ LÀ SỐ PHẬN</span>
+          <h2 className="font-['Space_Grotesk','Be_Vietnam_Pro',sans-serif] font-extrabold text-[18px] sm:text-[22px] leading-[25px] sm:leading-[30px] text-black tracking-tight uppercase text-center mt-1.5 [text-wrap:balance]">
+            <span className="block">{title}</span>
+            <span className="block text-[#FA5B13] mt-0.5">{highlight}</span>
           </h2>
         </div>
 
         {/* Subtitle: Căn giữa */}
-        <p className="mt-3.5 font-['Space_Grotesk'] font-medium text-[15px] sm:text-[17px] leading-[22px] sm:leading-[25px] text-neutral-800 text-center">
-          Điền thông tin của bạn xuống dưới để nhận trọn bộ Ebook, tài liệu & kích hoạt vé giữ chỗ miễn phí:
+        <p className="mt-3.5 font-['Space_Grotesk','Be_Vietnam_Pro',sans-serif] font-medium text-[15px] sm:text-[17px] leading-[22px] sm:leading-[25px] text-neutral-800 text-center">
+          {subtitle}
         </p>
 
         {/* 3 Textboxes Form */}
@@ -107,7 +126,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
               placeholder="Tên của bạn"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full h-[54px] sm:h-[58px] px-5 bg-white border border-black rounded-[16px] font-['Space_Grotesk'] text-[16px] text-black placeholder:text-[#898989] focus:outline-none focus:ring-2 focus:ring-[#FA5B13]"
+              className="w-full h-[54px] sm:h-[58px] px-5 bg-white border border-black rounded-[16px] font-['Space_Grotesk','Be_Vietnam_Pro',sans-serif] text-[16px] text-black placeholder:text-[#898989] focus:outline-none focus:ring-2 focus:ring-[#FA5B13]"
             />
           </div>
 
@@ -119,7 +138,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
               placeholder="SĐT của bạn"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full h-[54px] sm:h-[58px] px-5 bg-white border border-black rounded-[16px] font-['Space_Grotesk'] text-[16px] text-black placeholder:text-[#898989] focus:outline-none focus:ring-2 focus:ring-[#FA5B13]"
+              className="w-full h-[54px] sm:h-[58px] px-5 bg-white border border-black rounded-[16px] font-['Space_Grotesk','Be_Vietnam_Pro',sans-serif] text-[16px] text-black placeholder:text-[#898989] focus:outline-none focus:ring-2 focus:ring-[#FA5B13]"
             />
           </div>
 
@@ -131,14 +150,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
               placeholder="Email của bạn"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-[54px] sm:h-[58px] px-5 bg-white border border-black rounded-[16px] font-['Space_Grotesk'] text-[16px] text-black placeholder:text-[#898989] focus:outline-none focus:ring-2 focus:ring-[#FA5B13]"
+              className="w-full h-[54px] sm:h-[58px] px-5 bg-white border border-black rounded-[16px] font-['Space_Grotesk','Be_Vietnam_Pro',sans-serif] text-[16px] text-black placeholder:text-[#898989] focus:outline-none focus:ring-2 focus:ring-[#FA5B13]"
             />
           </div>
 
           {/* Success message */}
           {isSuccess && (
-            <div className="p-3 bg-[#FFF0E6] text-[#C2410C] text-center font-['Space_Grotesk'] font-bold rounded-[14px] text-sm border border-[#FA5B13] animate-fadeIn">
-              ✓ Đã giữ chỗ thành công! Bộ quà tặng và vé đang được chuyển tiếp tới bạn.
+            <div className="p-3 bg-[#FFF0E6] text-[#C2410C] text-center font-['Space_Grotesk','Be_Vietnam_Pro',sans-serif] font-bold rounded-[14px] text-sm border border-[#FA5B13] animate-fadeIn">
+              {successMessage}
             </div>
           )}
 
@@ -146,13 +165,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full h-[58px] sm:h-[62px] bg-[#FA5B13] hover:bg-[#DD4900] text-white font-['Space_Grotesk'] font-bold text-[17px] sm:text-[19px] rounded-[16px] transition-all duration-200 cursor-pointer shadow-md hover:shadow-xl uppercase tracking-wider border border-[#FA5B13] flex items-center justify-center mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full h-[58px] sm:h-[62px] bg-[#FA5B13] hover:bg-[#DD4900] text-white font-['Space_Grotesk','Be_Vietnam_Pro',sans-serif] font-bold text-[17px] sm:text-[19px] rounded-[16px] transition-all duration-200 cursor-pointer shadow-md hover:shadow-xl uppercase tracking-wider border border-[#FA5B13] flex items-center justify-center mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'ĐANG XỬ LÝ...' : 'GỬI BỘ QUÀ TẶNG & VÉ MIỄN PHÍ CHO TÔI'}
+            {isSubmitting ? 'ĐANG XỬ LÝ...' : submitLabel}
           </button>
 
           {/* Faint grey text */}
-          <p className="font-['Space_Grotesk'] text-[13px] text-neutral-400 text-center select-none pt-1">
+          <p className="font-['Space_Grotesk','Be_Vietnam_Pro',sans-serif] text-[13px] text-neutral-400 text-center select-none pt-1">
             thông tin của bạn được bảo mật tuyệt đối
           </p>
         </form>
