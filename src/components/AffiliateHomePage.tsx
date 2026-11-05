@@ -3,8 +3,9 @@ import { ArrowLeft, ArrowRight, Sprout } from 'lucide-react';
 import { goTo } from './AffiliateLandingPage';
 
 // Link nhóm Zalo kín dành cho học viên Thử thách 2 ngày Affiliate
-const ZALO_GROUP_LINK = 'https://zalo.me/g/a2y2x036pqkwzig7u9ri';
-const QR_URL =
+const ZALO_GROUP_LINK = 'https://zalo.me/g/jgxfxq6uu7xuuobade3o';
+const QR_URL = '/assets/affiliate/zalo-group-qr.png';
+const QR_FALLBACK_URL =
   'https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data=' + encodeURIComponent(ZALO_GROUP_LINK);
 
 // Trang đích (cảm ơn) sau khi đăng ký Thử thách 2 ngày Affiliate – route /home
@@ -75,9 +76,11 @@ export const AffiliateHomePage: React.FC = () => {
             <p className="type-figure text-5xl text-[#FA5B13]">
               {minutes}:{seconds}
             </p>
-            <p className="font-dancing-script font-bold text-xl sm:text-2xl text-[#C2410C]">
-              Chỉ có 7 chỗ ngồi – ban tổ chức duyệt trong 3 phút thôi nhé!
-            </p>
+            <div className="pt-1">
+              <p className="inline-block font-black text-base sm:text-lg text-red-600 bg-red-50 border-2 border-red-300 rounded-xl px-4 py-2.5 shadow-sm tracking-tight">
+                🔥 Chỉ có 7 chỗ ngồi – ban tổ chức duyệt trong 3 phút thôi nhé!
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -104,11 +107,17 @@ export const AffiliateHomePage: React.FC = () => {
 
           <div className="flex flex-col items-center gap-3">
             <p className="text-sm text-gray-600">Hoặc mở Zalo và quét mã QR:</p>
-            <img
-              src={QR_URL}
-              alt="Mã QR nhóm Zalo kín Thử thách 2 ngày Affiliate"
-              className="w-40 h-40 sm:w-44 sm:h-44 border border-gray-200 p-2"
-            />
+            <div className="p-2.5 bg-white border border-gray-200/90 rounded-2xl shadow-sm inline-block">
+              <img
+                src={QR_URL}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = QR_FALLBACK_URL;
+                }}
+                alt="Mã QR nhóm Zalo kín Thử thách 2 ngày Affiliate"
+                className="w-40 h-40 sm:w-44 sm:h-44 img-crisp block"
+                loading="lazy"
+              />
+            </div>
           </div>
         </div>
       </main>

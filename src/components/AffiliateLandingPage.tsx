@@ -2,7 +2,44 @@ import React, { useEffect, useState } from 'react';
 import { Menu, X, Sprout, ArrowRight } from 'lucide-react';
 import { RegisterModal } from './RegisterModal';
 
-const IMG = '/assets/affiliate';
+const ASSETS = {
+  heroBundle: '/assets/aistudio/1_c1ec481e.webp',
+  eventStage: '/assets/aistudio/2_4147d45c.webp',
+  workshopGroup: '/assets/aistudio/3_377158da.webp',
+  trainerMountain: '/assets/aistudio/4_662212b0.webp',
+  meeting: '/assets/aistudio/5_967292ca.webp',
+  whiteboard: '/assets/aistudio/6_d0e8379e.webp',
+  thinking: '/assets/aistudio/7_9074c0a5.webp',
+  chats: [
+    '/assets/aistudio/8_28441fde.webp',
+    '/assets/aistudio/9_c8f175bb.webp',
+    '/assets/aistudio/10_c5bfc833.webp',
+    '/assets/aistudio/11_c8f175bb.webp',
+    '/assets/aistudio/12_28e98443.webp',
+    '/assets/aistudio/13_fc197636.webp',
+  ],
+  modules: [
+    '/assets/aistudio/14_afdc2e66.webp',
+    '/assets/aistudio/15_a9a6376f.webp',
+    '/assets/aistudio/16_23086051.webp',
+    '/assets/aistudio/17_15ad54cf.webp',
+    '/assets/aistudio/18_8e35b4cd.webp',
+  ],
+  gifts: [
+    '/assets/aistudio/19_aa8746dd.webp',
+    '/assets/aistudio/20_d2792ef7.webp',
+    '/assets/aistudio/21_8a3820c1.webp',
+    '/assets/aistudio/22_215fee38.webp',
+    '/assets/aistudio/23_8e35b4cd.webp',
+    '/assets/aistudio/24_1f76319f.webp',
+    '/assets/aistudio/25_4147d45c.webp',
+    '/assets/aistudio/26_1d1d3523.webp',
+  ],
+  before: '/assets/aistudio/27_99db4e4f.webp',
+  after: '/assets/aistudio/28_c74f3caf.webp',
+  trainer: '/assets/aistudio/29_662212b0.webp',
+  hourglass: '/assets/aistudio/30_2f92e0a5.jpg',
+};
 
 // Chuyển trang trong SPA (App lắng nghe sự kiện popstate để đổi route)
 export const goTo = (path: string) => {
@@ -14,6 +51,7 @@ export const goTo = (path: string) => {
 export const AffiliateLandingPage: React.FC = () => {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -23,14 +61,23 @@ export const AffiliateLandingPage: React.FC = () => {
     };
   }, []);
 
-  // Ảnh mới chưa có trên máy thì tạm hiển thị ảnh cũ
-  const withFallback = (fallback?: string) =>
-    fallback
-      ? (e: React.SyntheticEvent<HTMLImageElement>) => {
-          const img = e.currentTarget;
-          if (!img.src.endsWith(fallback)) img.src = fallback;
-        }
-      : undefined;
+  // Tự động bật pop up đăng ký khi người dùng cuộn xuống dưới cùng trang
+  useEffect(() => {
+    const handleScroll = () => {
+      if (hasScrolledToBottom) return;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const clientHeight = window.innerHeight || document.documentElement.clientHeight;
+      // Khi cuộn gần tới cuối trang (cách đáy <= 160px hoặc đạt trên 92% trang)
+      if (scrollTop + clientHeight >= scrollHeight - 160) {
+        setIsRegisterOpen(true);
+        setHasScrolledToBottom(true);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [hasScrolledToBottom]);
 
   const navItems = [
     { id: 'aff-01', label: 'Dành cho ai' },
@@ -141,10 +188,7 @@ export const AffiliateLandingPage: React.FC = () => {
       modules: [
         {
           title: 'Bí mật Affiliate: cách tạo dòng tiền 100 triệu với rủi ro bằng 0',
-          img: `${IMG}/cafe-meetup.jpg`,
-          fallback: `${IMG}/workshop-group.jpg`,
-          // Người nói ngồi bên phải ảnh ngang → giữ phần bên phải khi cắt vuông
-          imgPosition: 'object-[78%_center]',
+          img: ASSETS.modules[0],
           body: (
             <>
               <p>
@@ -160,7 +204,7 @@ export const AffiliateLandingPage: React.FC = () => {
         },
         {
           title: 'Bí mật X10 thu nhập từ đòn bẩy vô hạn',
-          img: `${IMG}/x10-leverage.jpg`,
+          img: ASSETS.modules[1],
           body: (
             <>
               <p>Cách nhân X10 thu nhập trong thời gian ngắn cực kỳ hiệu quả không rào bản…</p>
@@ -173,7 +217,7 @@ export const AffiliateLandingPage: React.FC = () => {
         },
         {
           title: 'Hậu trường mô hình kiếm ra tiền mặt',
-          img: `${IMG}/backstage.jpg`,
+          img: ASSETS.modules[2],
           body: (
             <>
               <p>
@@ -194,7 +238,7 @@ export const AffiliateLandingPage: React.FC = () => {
       modules: [
         {
           title: 'Bí mật xây dựng dòng tiền trong 5 phút bấm điện thoại',
-          img: `${IMG}/backstage-portrait.jpg`,
+          img: ASSETS.modules[3],
           body: (
             <>
               <p>
@@ -218,7 +262,7 @@ export const AffiliateLandingPage: React.FC = () => {
         },
         {
           title: 'Bí mật X100 Affiliate Tự Động – chi phí 0đ',
-          img: `${IMG}/x100-funnel.jpg`,
+          img: ASSETS.modules[4],
           body: (
             <>
               <p>Bạn hoàn toàn có thể gia tăng thu nhập, mở rộng quy mô không tưởng chỉ với 0Đ…</p>
@@ -241,7 +285,7 @@ export const AffiliateLandingPage: React.FC = () => {
     {
       title: 'Hệ thống nội dung đăng mạng xã hội làm sẵn 365 ngày',
       value: '10.868.000đ',
-      img: `${IMG}/gift-1.jpg`,
+      img: ASSETS.gifts[0],
       body: (
         <>
           <p>Mạng xã hội là mỏ vàng miễn phí cho bất kỳ ai biết cách khai thác…</p>
@@ -258,7 +302,7 @@ export const AffiliateLandingPage: React.FC = () => {
     {
       title: 'Hệ thống nội dung chia sẻ giá trị làm sẵn 365 ngày',
       value: '12.868.000đ',
-      img: `${IMG}/gift-2.jpg`,
+      img: ASSETS.gifts[1],
       body: (
         <>
           <p>
@@ -276,7 +320,7 @@ export const AffiliateLandingPage: React.FC = () => {
     {
       title: 'Hệ thống xây thương hiệu chuyên gia',
       value: '12.868.000đ',
-      img: `${IMG}/gift-3.jpg`,
+      img: ASSETS.gifts[2],
       body: (
         <>
           <p>Sự thật, không ai thích mua hàng hay làm việc với người nghiệp dư cả…</p>
@@ -295,7 +339,7 @@ export const AffiliateLandingPage: React.FC = () => {
     {
       title: 'Hệ thống phát triển trọn đời của tôi',
       value: '19.868.000đ',
-      img: `${IMG}/gift-4.jpg`,
+      img: ASSETS.gifts[3],
       body: (
         <>
           <p>
@@ -312,7 +356,7 @@ export const AffiliateLandingPage: React.FC = () => {
     {
       title: 'Hệ thống xây kênh 1.000.000 view thần tốc',
       value: '9.868.000đ',
-      img: `${IMG}/gift-5.jpg`,
+      img: ASSETS.gifts[4],
       body: (
         <>
           <p>Không gì thu hút nhiều người online hơn cách sở hữu cho mình một kênh thương hiệu cá nhân triệu view…</p>
@@ -326,7 +370,7 @@ export const AffiliateLandingPage: React.FC = () => {
     {
       title: 'Hệ thống đào tạo tự nhân bản',
       value: '9.868.000đ',
-      img: `${IMG}/gift-6.jpg`,
+      img: ASSETS.gifts[5],
       body: (
         <>
           <p>Khi bạn được nhận rất nhiều vũ khí bí mật từ tôi rồi, đến đây bạn đã trở thành siêu nhân kiếm tiền.</p>
@@ -345,7 +389,7 @@ export const AffiliateLandingPage: React.FC = () => {
     {
       title: 'Bí mật hệ thống phát triển dòng tiền trọn đời',
       value: '19.868.000đ',
-      img: `${IMG}/seminar.jpg`,
+      img: ASSETS.gifts[6],
       body: (
         <>
           <p>
@@ -363,8 +407,7 @@ export const AffiliateLandingPage: React.FC = () => {
     {
       title: 'Nhóm kín “Bí mật dòng tiền”',
       value: 'Vô giá',
-      img: `${IMG}/zoom-class.jpg`,
-      fallback: `${IMG}/gift-8.jpg`,
+      img: ASSETS.gifts[7],
       body: (
         <>
           <p>
@@ -486,11 +529,13 @@ export const AffiliateLandingPage: React.FC = () => {
               dòng tiền 100 triệu/tháng. Không cần giỏi. Không cần bằng cấp. Chỉ cần điện thoại bạn có wifi.
             </p>
 
-            <img
-              src={`${IMG}/hero-bundle.jpg`}
-              alt="Bộ quà tặng Affiliate Tự Động"
-              className="w-full max-w-3xl mx-auto"
-            />
+            <div className="overflow-hidden rounded-2xl border border-gray-200/60 shadow-lg bg-gray-50/50 max-w-3xl mx-auto p-1 sm:p-2">
+              <img
+                src={ASSETS.heroBundle}
+                alt="Bộ quà tặng Affiliate Tự Động"
+                className="w-full h-auto object-contain img-crisp rounded-xl block"
+              />
+            </div>
 
             <div className="max-w-2xl mx-auto pt-2 space-y-4">
               <p className="text-lg sm:text-xl text-gray-900 leading-snug">
@@ -530,18 +575,23 @@ export const AffiliateLandingPage: React.FC = () => {
                 </h3>
                 <NumberedList items={painPoints} />
               </div>
-              <div className="lg:col-span-5 space-y-4">
-                <img
-                  src={`${IMG}/event-stage.jpg`}
-                  onError={withFallback(`${IMG}/seminar.jpg`)}
-                  alt="Trung Dũng chia sẻ trên sân khấu hội thảo"
-                  className="w-full aspect-video object-cover rounded-md"
-                />
-                <img
-                  src={`${IMG}/workshop-group.jpg`}
-                  alt="Học viên thực hành cùng Trung Dũng"
-                  className="w-full aspect-4/3 object-cover rounded-md"
-                />
+              <div className="lg:col-span-5 space-y-5">
+                <div className="overflow-hidden rounded-xl border border-gray-200/80 shadow-sm bg-gray-50">
+                  <img
+                    src={ASSETS.eventStage}
+                    alt="Trung Dũng chia sẻ trên sân khấu hội thảo"
+                    className="w-full aspect-video object-cover img-crisp"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="overflow-hidden rounded-xl border border-gray-200/80 shadow-sm bg-gray-50">
+                  <img
+                    src={ASSETS.workshopGroup}
+                    alt="Học viên thực hành cùng Trung Dũng"
+                    className="w-full aspect-4/3 object-cover img-crisp"
+                    loading="lazy"
+                  />
+                </div>
               </div>
             </div>
 
@@ -565,11 +615,14 @@ export const AffiliateLandingPage: React.FC = () => {
           <div className="max-w-5xl mx-auto space-y-16">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
               <div className="lg:col-span-4">
-                <img
-                  src={`${IMG}/trainer-mountain.jpg`}
-                  alt="Trung Dũng"
-                  className="w-full max-w-xs mx-auto aspect-4/5 object-cover rounded-md"
-                />
+                <div className="overflow-hidden rounded-2xl border border-gray-200/80 shadow-sm bg-gray-50 max-w-xs mx-auto">
+                  <img
+                    src={ASSETS.trainerMountain}
+                    alt="Trung Dũng"
+                    className="w-full aspect-4/5 object-cover img-crisp"
+                    loading="lazy"
+                  />
+                </div>
                 <p className="text-center text-sm text-gray-500 mt-3">
                   Tin nhắn từ <span className="type-h3 text-xl text-gray-900">Trung Dũng</span>
                 </p>
@@ -630,11 +683,14 @@ export const AffiliateLandingPage: React.FC = () => {
                 </div>
               </div>
               <div className="lg:col-span-5">
-                <img
-                  src={`${IMG}/meeting.jpg`}
-                  alt="Trung Dũng cầm tay chỉ việc cho học viên"
-                  className="w-full aspect-4/5 object-cover rounded-md"
-                />
+                <div className="overflow-hidden rounded-2xl border border-gray-200/80 shadow-sm bg-gray-50 max-w-md mx-auto">
+                  <img
+                    src={ASSETS.meeting}
+                    alt="Trung Dũng cầm tay chỉ việc cho học viên"
+                    className="w-full aspect-4/5 object-cover img-crisp"
+                    loading="lazy"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -655,11 +711,14 @@ export const AffiliateLandingPage: React.FC = () => {
                 <NumberedList items={reasons} />
               </div>
               <div className="lg:col-span-5">
-                <img
-                  src={`${IMG}/whiteboard.jpg`}
-                  alt="Trung Dũng giảng giải chiến lược phễu bán hàng"
-                  className="w-full aspect-3/4 object-cover rounded-md"
-                />
+                <div className="overflow-hidden rounded-2xl border border-gray-200/80 shadow-sm bg-gray-50 max-w-md mx-auto">
+                  <img
+                    src={ASSETS.whiteboard}
+                    alt="Trung Dũng giảng giải chiến lược phễu bán hàng"
+                    className="w-full aspect-3/4 object-cover img-crisp"
+                    loading="lazy"
+                  />
+                </div>
               </div>
             </div>
 
@@ -701,11 +760,14 @@ export const AffiliateLandingPage: React.FC = () => {
                 </div>
               </div>
               <div className="lg:col-span-5">
-                <img
-                  src={`${IMG}/thinking.jpg`}
-                  alt="Trung Dũng"
-                  className="w-full aspect-square object-cover rounded-md"
-                />
+                <div className="overflow-hidden rounded-2xl border border-gray-200/80 shadow-sm bg-gray-50 max-w-md mx-auto">
+                  <img
+                    src={ASSETS.thinking}
+                    alt="Trung Dũng"
+                    className="w-full aspect-square object-cover img-crisp"
+                    loading="lazy"
+                  />
+                </div>
               </div>
             </div>
 
@@ -728,14 +790,19 @@ export const AffiliateLandingPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="columns-1 sm:columns-2 gap-6">
-              {['chat-1', 'chat-2', 'chat-3', 'chat-4'].map((name, idx) => (
-                <img
-                  key={name}
-                  src={`${IMG}/${name}.jpg`}
-                  alt={`Phản hồi học viên ${idx + 1}`}
-                  className="w-full mb-6 break-inside-avoid border border-gray-200"
-                />
+            <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 max-w-5xl mx-auto">
+              {ASSETS.chats.map((chatSrc, idx) => (
+                <div
+                  key={chatSrc}
+                  className="mb-6 break-inside-avoid rounded-2xl overflow-hidden border border-gray-200/90 shadow-sm hover:shadow-md transition-shadow bg-gray-50 p-1 sm:p-2"
+                >
+                  <img
+                    src={chatSrc}
+                    alt={`Phản hồi học viên ${idx + 1}`}
+                    className="w-full h-auto rounded-xl object-contain block img-crisp"
+                    loading="lazy"
+                  />
+                </div>
               ))}
             </div>
 
@@ -778,12 +845,14 @@ export const AffiliateLandingPage: React.FC = () => {
                       <NewbieNote />
                     </div>
                     <div className={`lg:col-span-5 ${idx % 2 === 1 ? 'lg:order-1' : ''}`}>
-                      <img
-                        src={m.img}
-                        onError={withFallback('fallback' in m ? m.fallback : undefined)}
-                        alt={m.title}
-                        className={`w-full aspect-square object-cover rounded-md ${'imgPosition' in m ? m.imgPosition : ''}`}
-                      />
+                      <div className="overflow-hidden rounded-2xl border border-gray-200/80 shadow-sm bg-gray-50 max-w-md mx-auto">
+                        <img
+                          src={m.img}
+                          alt={m.title}
+                          className={`w-full aspect-square object-cover img-crisp ${'imgPosition' in m ? m.imgPosition : ''}`}
+                          loading="lazy"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -811,12 +880,14 @@ export const AffiliateLandingPage: React.FC = () => {
                   className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center py-12 border-b border-gray-200"
                 >
                   <div className="lg:col-span-5">
-                    <img
-                      src={g.img}
-                      onError={withFallback('fallback' in g ? g.fallback : undefined)}
-                      alt={g.title}
-                      className="w-full aspect-4/3 object-contain"
-                    />
+                    <div className="rounded-2xl border border-gray-200/70 bg-gradient-to-b from-gray-50/80 to-white p-3 sm:p-5 flex items-center justify-center shadow-sm">
+                      <img
+                        src={g.img}
+                        alt={g.title}
+                        className="w-full max-h-72 aspect-4/3 object-contain img-crisp drop-shadow-sm transition-transform hover:scale-[1.02]"
+                        loading="lazy"
+                      />
+                    </div>
                   </div>
                   <div className="lg:col-span-7 space-y-4">
                     <div className="flex items-baseline justify-between gap-4">
@@ -875,7 +946,14 @@ export const AffiliateLandingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-0 md:divide-x divide-gray-200">
               <div className="md:pr-10 space-y-5">
-                <img src={`${IMG}/before.jpg`} alt="Trước thử thách" className="w-full aspect-16/10 object-cover rounded-md grayscale" />
+                <div className="overflow-hidden rounded-2xl border border-gray-200/80 shadow-sm bg-gray-50">
+                  <img
+                    src={ASSETS.before}
+                    alt="Trước thử thách"
+                    className="w-full aspect-16/10 object-cover grayscale img-crisp"
+                    loading="lazy"
+                  />
+                </div>
                 <h3 className="type-h3 text-2xl sm:text-3xl text-gray-500">Trước</h3>
                 <ul className="space-y-3 text-base text-gray-600 leading-relaxed">
                   {before.map((item) => (
@@ -888,11 +966,14 @@ export const AffiliateLandingPage: React.FC = () => {
               </div>
 
               <div className="md:pl-10 space-y-5">
-                <img
-                  src={`${IMG}/backstage-portrait.jpg`}
-                  alt="Sau thử thách"
-                  className="w-full aspect-16/10 object-cover object-top rounded-md"
-                />
+                <div className="overflow-hidden rounded-2xl border border-orange-200/80 shadow-sm bg-orange-50/20">
+                  <img
+                    src={ASSETS.after}
+                    alt="Sau thử thách"
+                    className="w-full aspect-16/10 object-cover object-top img-crisp"
+                    loading="lazy"
+                  />
+                </div>
                 <h3 className="type-h3 text-2xl sm:text-3xl text-[#FA5B13]">Sau</h3>
                 <ul className="space-y-3 text-base text-gray-800 leading-relaxed">
                   {after.map((item) => (
@@ -918,12 +999,14 @@ export const AffiliateLandingPage: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
               <div className="lg:col-span-5">
-                <img
-                  src={`${IMG}/trainer-podcast.jpg`}
-                  onError={withFallback(`${IMG}/trainer-mountain.jpg`)}
-                  alt="Trung Dũng"
-                  className="w-full max-w-sm mx-auto aspect-4/5 object-cover rounded-md"
-                />
+                <div className="overflow-hidden rounded-2xl border border-gray-200/80 shadow-md bg-gray-50 max-w-sm mx-auto">
+                  <img
+                    src={ASSETS.trainer}
+                    alt="Trung Dũng"
+                    className="w-full aspect-4/5 object-cover img-crisp"
+                    loading="lazy"
+                  />
+                </div>
               </div>
               <div className="lg:col-span-7 space-y-5">
                 <h3 className="type-h2 text-3xl sm:text-4xl text-gray-950">Trung Dũng</h3>
@@ -971,12 +1054,15 @@ export const AffiliateLandingPage: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <div className="lg:col-span-5">
-                <img
-                  src={`${IMG}/hourglass.jpg`}
-                  alt="Thời gian không chờ đợi ai"
-                  className="w-full max-w-sm mx-auto aspect-square object-cover rounded-md"
-                />
+              <div className="lg:col-span-5 flex justify-center">
+                <div className="overflow-hidden rounded-2xl border border-gray-200/80 shadow-sm bg-gray-50 max-w-xs w-full">
+                  <img
+                    src={ASSETS.hourglass}
+                    alt="Thời gian không chờ đợi ai"
+                    className="w-full aspect-square object-cover img-crisp"
+                    loading="lazy"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1003,7 +1089,14 @@ export const AffiliateLandingPage: React.FC = () => {
               <p className="text-base sm:text-lg text-gray-700">
                 Khi bạn đăng ký tham gia thử thách 2 ngày ngay hôm nay:
               </p>
-              <img src={`${IMG}/hero-bundle.jpg`} alt="Trọn bộ quà tặng Affiliate Tự Động" className="w-full" />
+              <div className="overflow-hidden rounded-2xl border border-gray-200/60 shadow-lg bg-gray-50/50 max-w-3xl mx-auto p-1 sm:p-2">
+                <img
+                  src={ASSETS.heroBundle}
+                  alt="Trọn bộ quà tặng Affiliate Tự Động"
+                  className="w-full h-auto object-contain img-crisp rounded-xl block"
+                  loading="lazy"
+                />
+              </div>
 
               {/* Danh sách quà dạng biên nhận */}
               <ul className="text-left text-sm sm:text-base">

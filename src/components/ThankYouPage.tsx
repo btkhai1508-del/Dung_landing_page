@@ -63,7 +63,7 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({ userName, onBackToHo
   const minutes = Math.floor((timeLeft % 3600) / 60);
   const seconds = timeLeft % 60;
 
-  const zaloGroupLink = 'https://zalo.me/g/a2y2x036pqkwzig7u9ri';
+  const zaloGroupLink = 'https://zalo.me/g/jgxfxq6uu7xuuobade3o';
   const qrBackupUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data=' + encodeURIComponent(zaloGroupLink);
 
   const displayName = userName && userName.trim() ? userName.trim() : 'Bùi Trung Khải';

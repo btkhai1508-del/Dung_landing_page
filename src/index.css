@@ -190,3 +190,18 @@
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+/* Tối ưu độ nét cho hình ảnh trang Affiliate và toàn ứng dụng */
+.img-crisp {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+}
+
+img {
+  text-rendering: optimizeLegibility;
+}
+
+
