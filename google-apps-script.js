@@ -33,49 +33,61 @@ function doPost(e) {
     const customerName = get("name");
     const customerPhone = get("phone");
     const customerEmail = get("email");
-    const sheetName = get("sheet");   // "Quà Tặng Tầng 1" (/bando), "Affiliate", hoặc rỗng = tab đầu tiên
-    const formType = get("form");
+    const formType = get("formType") || get("form");
+    const sheetName = resolveSheetName(formType, get("sheet"));
 
     // Các cột cần ghi (tiêu đề → giá trị), theo đúng thứ tự frontend gửi lên
     let fields = {};
     try { fields = JSON.parse(get("fields") || "{}"); } catch (err) {}
     if (Object.keys(fields).length === 0) {
-      fields = { "Họ Và Tên": customerName, "SĐT": customerPhone, "Email": customerEmail };
+      // Frontend bản cũ không gửi `fields` → tự dựng lại từ các tham số rời
+      fields = normalizeName(sheetName) === normalizeName(BANDO_SHEET)
+        ? buildBandoFieldsFromLegacy(get)
+        : { "Họ Và Tên": customerName, "SĐT": customerPhone, "Email": customerEmail };
     }
 
     const timestamp = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+    let duplicate = false;
 
     // 1. Lưu vào đúng tab Google Sheet
+    const lock = LockService.getScriptLock();
     try {
-      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      const sheet = getTargetSheet(ss, sheetName);
-      const row = Object.assign({ "Thời Gian": timestamp }, fields);
+      lock.waitLock(20000);
 
-      if (normalizeName(sheet.getName()) === normalizeName(BANDO_SHEET)) {
-        // Tab "Quà Tặng Tầng 1": cột đầu tiên là Mã DDMMXXX (XXX = STT trong ngày, 001–999)
-        const lock = LockService.getScriptLock();
-        lock.waitLock(15000);
-        try {
+      // Chống ghi trùng: cùng tab + cùng người gửi lại trong 60 giây thì bỏ qua
+      const cache = CacheService.getScriptCache();
+      const dupKey = "dup_" + Utilities.base64EncodeWebSafe(
+        Utilities.computeDigest(Utilities.DigestAlgorithm.MD5,
+          [sheetName, customerName, customerPhone, customerEmail].map(normalizeName).join("|"), Utilities.Charset.UTF_8));
+      duplicate = !!cache.get(dupKey);
+
+      if (!duplicate) {
+        cache.put(dupKey, "1", 60);
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getTargetSheet(ss, sheetName);
+        let row = Object.assign({ "Thời Gian": timestamp }, fields);
+        if (normalizeName(sheet.getName()) === normalizeName(BANDO_SHEET)) {
+          // Tab "Quà Tặng Tầng 1": cột A là Mã DDMMXXX (XXX = STT trong ngày, 001–999)
           ensureFirstColumn(sheet, CODE_HEADER);
-          appendRowByHeaders(sheet, Object.assign({ [CODE_HEADER]: "'" + nextDailyCode(sheet.getName()) }, row));
-        } finally {
-          lock.releaseLock();
+          row = Object.assign({ [CODE_HEADER]: nextDailyCode(sheet.getName()) }, row);
         }
-      } else {
-        appendRowByHeaders(sheet, row);
+        writeRowByHeaders(sheet, row);
       }
     } catch (sheetError) {
       Logger.log("Lỗi ghi Google Sheet: " + sheetError.toString());
+    } finally {
+      lock.releaseLock();
     }
 
     // 2. Gửi email xác nhận kèm nút Zalo, mã QR Code và châm ngôn Dancing Script
-    if (customerEmail && customerEmail.indexOf("@") !== -1) {
+    if (!duplicate && customerEmail && customerEmail.indexOf("@") !== -1) {
       sendWelcomeEmail(customerName || "Bạn", customerEmail);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       sheet: sheetName || "(tab đầu tiên)",
+      duplicate: duplicate,
       form: formType,
       saved: { name: customerName, phone: customerPhone, email: customerEmail }
     })).setMimeType(ContentService.MimeType.JSON);
@@ -90,6 +102,7 @@ function doPost(e) {
 
 const BANDO_SHEET = "Quà Tặng Tầng 1";
 const CODE_HEADER = "Mã";
+const AFFILIATE_SHEET = "Affiliate";
 
 // Sinh mã DDMMXXX theo giờ Việt Nam. XXX đếm lại từ 001 mỗi ngày (lưu trong Script Properties).
 function nextDailyCode(sheetName) {
@@ -133,31 +146,108 @@ function getTargetSheet(ss, sheetName) {
   return found || ss.insertSheet(sheetName);
 }
 
-// Ghi 1 dòng theo hàng tiêu đề (dòng 1) của tab: cột nào khớp tiêu đề thì ghi vào đó,
-// tiêu đề chưa có thì tự thêm cột mới ở cuối.
-function appendRowByHeaders(sheet, data) {
-  const lastCol = sheet.getLastColumn();
-  let headers = (sheet.getLastRow() > 0 && lastCol > 0)
-    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String)
-    : [];
-  const normalized = headers.map(normalizeName);
+// Chọn tab theo loại form (hỗ trợ cả frontend bản cũ vốn gửi nhầm tab)
+function resolveSheetName(formType, requested) {
+  const f = String(formType || "").toUpperCase();
+  if (f === "THU_THACH_AFFILIATE") return AFFILIATE_SHEET;
+  if (f === "BANDO" || f === "BAN_DO_HANH_PHUC") return BANDO_SHEET;
+  if (f === "QUA_TANG_MIEN_PHI") return "";   // popup trang chủ → tab đầu tiên
+  return requested;
+}
 
-  const row = new Array(headers.length).fill("");
+// Thứ tự cột của tab "Quà Tặng Tầng 1" khi frontend bản cũ chỉ gửi tham số rời
+const BANDO_LEGACY_COLUMNS = [
+  ["Họ Và Tên", "Họ và tên", "fullName", "name"],
+  ["SĐT", "Số điện thoại", "phone"],
+  ["Email", "Email", "email"],
+  ["Ngày sinh", "Ngày sinh", "birthDate"],
+  ["Giờ sinh", "Giờ sinh", "birthTime"],
+  ["Giới tính", "Giới tính", "gender"],
+  ["Tỉnh thành", "Tỉnh thành", "city"],
+  ["Nghề nghiệp", "Nghề nghiệp", "occupation"],
+  ["Số chủ đạo", "Số chủ đạo", "lifePathNumber"],
+  ["Năm Can Chi", "Năm Can Chi", "tuViCanChi"],
+  ["Bản Mệnh", "Bản Mệnh", "tuViNguHanh"],
+  ["Cung Mệnh", "Cung Mệnh", "tuViCungMenh"],
+  ["Thời gian cho gia đình", "Thời gian cho gia đình", "familyTime"],
+  ["Có người thân đi kèm", "Có người thân đi kèm", "includeRelatives"],
+  ["Thông tin người thân", "Thông tin người thân", "relatives"],
+  ["Sức Khỏe", "Sức Khỏe"],
+  ["Gia Đình", "Gia Đình"],
+  ["Tài Chính", "Tài Chính"],
+  ["Sự Nghiệp", "Sự Nghiệp"],
+  ["Mối Quan Hệ", "Mối Quan Hệ"],
+  ["Phát Triển Bản Thân", "Phát Triển Bản Thân"],
+  ["Tinh Thần & Nội Tâm", "Tinh Thần & Nội Tâm"],
+  ["Đóng Góp Xã Hội", "Đóng Góp Xã Hội"],
+  ["Điểm trung bình bánh xe", "Điểm trung bình bánh xe"],
+  ["Bánh xe hạnh phúc", "Bánh xe hạnh phúc", "wheelScores"],
+  ["Lĩnh vực ưu tiên", "Lĩnh vực ưu tiên", "priorityArea"],
+  ["Mong muốn thay đổi", "desireChange"],
+  ["Rào cản lớn nhất", "Rào cản lớn nhất", "obstacles"],
+  ["Nhận quà tặng giải pháp chi tiết", "Nhận quà tặng giải pháp chi tiết", "wantGiftSolution"],
+  ["Hình thức hỗ trợ", "supportMethods"],
+  ["Kênh nhận bản đồ", "Kênh nhận bản đồ", "deliveryChannels"],
+  ["Đồng ý điều khoản", "consent"],
+];
+
+function buildBandoFieldsFromLegacy(get) {
+  const out = {};
+  BANDO_LEGACY_COLUMNS.forEach((col) => {
+    const value = col.slice(1).map(get).find((v) => v !== "") || "";
+    out[col[0]] = value;
+  });
+  return out;
+}
+
+const isBlank = (v) => String(v === null || v === undefined ? "" : v).trim() === "";
+
+// Ghi 1 dòng theo hàng tiêu đề (dòng 1):
+// - Dòng ghi = ngay dưới dòng cuối cùng có dữ liệu ở các cột CÓ tiêu đề
+//   (ghi chú lẻ ở cột không tiêu đề không làm dữ liệu bị đẩy xuống).
+// - Tiêu đề chưa có thì thêm vào ô tiêu đề trống đầu tiên mà cột bên dưới cũng trống,
+//   nếu không có thì thêm ở cuối.
+// - Chỉ ghi vào đúng các ô của form, không xoá nội dung khác trên dòng.
+// - Mọi giá trị ghi dạng chữ (giữ số 0 đầu của SĐT, Mã).
+function writeRowByHeaders(sheet, data) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const grid = (lastRow > 0 && lastCol > 0) ? sheet.getRange(1, 1, lastRow, lastCol).getValues() : [];
+  const headers = grid.length ? grid[0].map(String) : [];
+  const normalized = headers.map(normalizeName);
+  const columnHasData = (c) => grid.some((r, i) => i > 0 && !isBlank(r[c]));
+
+  const colOf = {};
   Object.keys(data).forEach((key) => {
     let idx = normalized.indexOf(normalizeName(key));
     if (idx === -1) {
-      headers.push(key);
-      normalized.push(normalizeName(key));
-      row.push("");
-      idx = headers.length - 1;
+      idx = headers.findIndex((h, c) => isBlank(h) && !columnHasData(c) && !Object.values(colOf).includes(c));
+      if (idx === -1) idx = Math.max(headers.length, 0);
+      headers[idx] = key;
+      normalized[idx] = normalizeName(key);
+      sheet.getRange(1, idx + 1).setValue(key);
     }
-    row[idx] = data[key];
+    colOf[key] = idx;
   });
 
-  if (headers.length > 0) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  // Dòng cuối có dữ liệu thật trong các cột có tiêu đề
+  let lastDataRow = 1;
+  for (let r = grid.length - 1; r >= 1; r--) {
+    if (headers.some((h, c) => !isBlank(h) && c < grid[r].length && !isBlank(grid[r][c]))) {
+      lastDataRow = r + 1;
+      break;
+    }
   }
-  sheet.appendRow(row);
+  const target = lastDataRow + 1;
+
+  const width = Math.max(...Object.values(colOf)) + 1;
+  const range = sheet.getRange(target, 1, 1, width);
+  const values = range.getValues()[0];
+  Object.keys(colOf).forEach((key) => {
+    const v = data[key];
+    values[colOf[key]] = isBlank(v) ? "" : "'" + String(v);
+  });
+  range.setValues([values]);
 }
 
 /**
