@@ -1082,13 +1082,17 @@ export const AffiliateLandingPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="max-w-3xl mx-auto text-center space-y-6 pt-4">
-              <h2 className="type-h2 text-[1.75rem] sm:text-4xl lg:text-[2.75rem] text-gray-900 max-w-3xl [text-wrap:balance] mx-auto">
-                Đây là tất cả bạn nhận được
-              </h2>
-              <p className="text-base sm:text-lg text-gray-700">
-                Khi bạn đăng ký tham gia thử thách 2 ngày ngay hôm nay:
-              </p>
+            <div className="max-w-3xl mx-auto text-center space-y-8 pt-4">
+              <div className="space-y-3">
+                <h2 className="type-h2 text-[1.75rem] sm:text-4xl lg:text-[2.75rem] text-gray-900 max-w-3xl [text-wrap:balance] mx-auto">
+                  Đây là tất cả bạn nhận được
+                </h2>
+                <p className="text-base sm:text-lg text-gray-700">
+                  Khi bạn đăng ký tham gia thử thách 2 ngày ngay hôm nay:
+                </p>
+              </div>
+
+              {/* Ảnh tổng hợp bộ quà */}
               <div className="overflow-hidden rounded-2xl border border-gray-200/60 shadow-lg bg-gray-50/50 max-w-3xl mx-auto p-1 sm:p-2">
                 <img
                   src={ASSETS.heroBundle}
@@ -1098,33 +1102,71 @@ export const AffiliateLandingPage: React.FC = () => {
                 />
               </div>
 
-              {/* Danh sách quà dạng biên nhận */}
-              <ul className="text-left text-sm sm:text-base">
-                <li className="flex items-baseline gap-2 py-2.5">
-                  <span className="font-semibold text-gray-900">Thử thách 2 ngày Affiliate – Tự Động</span>
-                  <span className="flex-1 border-b border-dotted border-gray-400" />
-                  <span className="font-semibold text-[#FA5B13] shrink-0">Miễn phí</span>
-                </li>
-                {gifts.map((g, idx) => (
-                  <li key={g.title} className="flex items-baseline gap-2 py-2.5">
-                    <span className="text-gray-700">
-                      Quà {idx + 1}: {g.title}
-                    </span>
+              {/* Danh sách quà dạng biên nhận (Receipt Style chuẩn reference) */}
+              <div className="max-w-2xl mx-auto text-left">
+                <ul className="text-base sm:text-lg divide-y divide-gray-100">
+                  <li className="flex items-baseline gap-2 py-3.5">
+                    <span className="font-bold text-gray-950">Thử thách 2 ngày Affiliate – Tự Động</span>
                     <span className="flex-1 border-b border-dotted border-gray-400 min-w-4" />
-                    <span className="text-gray-900 shrink-0">{g.value}</span>
+                    <span className="font-bold text-[#FA5B13] shrink-0 text-lg sm:text-xl">Miễn phí</span>
                   </li>
-                ))}
-                <li className="flex items-baseline gap-2 pt-4 mt-2 border-t-2 border-gray-900">
-                  <span className="font-bold text-gray-900">Tổng giá trị quà tặng</span>
-                  <span className="flex-1" />
-                  <span className="font-bold text-gray-900 shrink-0">125.970.000đ</span>
-                </li>
-              </ul>
+                  {gifts.map((g, idx) => {
+                    const isVoGia = g.value.toLowerCase().includes('vô giá');
+                    return (
+                      <li key={g.title} className="flex items-baseline gap-2 py-3.5">
+                        <span className="text-gray-800 leading-snug">
+                          <strong className="text-gray-950 font-bold">Quà {idx + 1}:</strong> {g.title}
+                        </span>
+                        <span className="flex-1 border-b border-dotted border-gray-400 min-w-4" />
+                        <span
+                          className={`shrink-0 font-mono font-bold ${
+                            isVoGia ? 'text-red-600 font-sans uppercase' : 'text-gray-950'
+                          }`}
+                        >
+                          {g.value}
+                        </span>
+                      </li>
+                    );
+                  })}
 
-              <p className="font-semibold text-gray-900 pt-4">
-                Nhấn tham gia thử thách ngay – trước khi hết sạch 7 chỗ ngồi.
-              </p>
-              <CtaButton />
+                  {/* TỔNG GIÁ TRỊ QUÀ TẶNG - ĐẶC BIỆT VÀ RÕ RÀNG THEO ĐÚNG CHẤT REFERENCE */}
+                  <li className="pt-6 mt-3 border-t-2 border-gray-950 space-y-4">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-bold text-xl sm:text-2xl text-gray-950">
+                        Tổng giá trị quà tặng
+                      </span>
+                      <span className="flex-1 border-b border-dotted border-gray-400 min-w-4 hidden sm:block" />
+                      <span className="type-figure text-3xl sm:text-4xl text-gray-950 font-bold shrink-0">
+                        125.970.000đ
+                      </span>
+                    </div>
+
+                    <div className="bg-[#FFF5F0] border-2 border-[#FA5B13] rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wider font-bold text-gray-600">
+                          Hôm nay dành cho bạn (chỉ 7 chỗ duyệt nhanh):
+                        </p>
+                        <p className="type-figure text-3xl sm:text-4xl font-bold text-[#FA5B13] mt-0.5">
+                          100% MIỄN PHÍ
+                        </p>
+                      </div>
+                      <div className="sm:text-right">
+                        <span className="inline-block text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">
+                          🔥 Ban tổ chức duyệt trong 3 phút
+                        </span>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-4 space-y-4 text-center">
+                <HandNote>Chỉ có đúng 7 suất – ban tổ chức duyệt trong 3 phút thôi nhé!</HandNote>
+                <p className="font-semibold text-gray-900 text-base sm:text-lg">
+                  Nhấn tham gia thử thách ngay – trước khi hết sạch 7 chỗ ngồi.
+                </p>
+                <CtaButton />
+              </div>
             </div>
           </div>
         </section>

@@ -43,31 +43,58 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      // Gửi dữ liệu vào tab sheet "THÔNG TIN" của Google Sheets theo yêu cầu
-      const targetSheet = 'THÔNG TIN';
-      const targetUrl = `${GOOGLE_SCRIPT_URL}?sheet=${encodeURIComponent(targetSheet)}&tab=${encodeURIComponent(targetSheet)}`;
+      // Gửi dữ liệu vào tab sheet "Quà Tặng Tầng 1" của Google Sheets theo đúng yêu cầu
+      const targetSheet = 'Quà Tặng Tầng 1';
+      const targetUrl = `${GOOGLE_SCRIPT_URL}?sheet=${encodeURIComponent(targetSheet)}&tab=${encodeURIComponent(targetSheet)}&sheetName=${encodeURIComponent(targetSheet)}&targetSheet=${encodeURIComponent(targetSheet)}`;
+
+      const payloadObj: Record<string, string> = {
+        name: name.trim(),
+        fullName: name.trim(),
+        'Họ và tên': name.trim(),
+        phone: phone.trim(),
+        'Số điện thoại': phone.trim(),
+        email: email.trim(),
+        Email: email.trim(),
+        sheet: targetSheet,
+        sheetName: targetSheet,
+        sheet_name: targetSheet,
+        tab: targetSheet,
+        tabName: targetSheet,
+        tab_name: targetSheet,
+        targetSheet: targetSheet,
+        target_sheet: targetSheet,
+        type: targetSheet,
+        action: targetSheet,
+        formType: formType,
+        timestamp: new Date().toLocaleString('vi-VN'),
+        'Thời gian gửi': new Date().toLocaleString('vi-VN'),
+      };
 
       const formData = new URLSearchParams();
-      formData.append('name', name.trim());
-      formData.append('phone', phone.trim());
-      formData.append('email', email.trim());
-      formData.append('sheet', targetSheet);
-      formData.append('sheetName', targetSheet);
-      formData.append('tab', targetSheet);
-      formData.append('tabName', targetSheet);
-      formData.append('targetSheet', targetSheet);
-      formData.append('type', targetSheet);
-      formData.append('formType', formType);
-      formData.append('timestamp', new Date().toLocaleString('vi-VN'));
-
-      await fetch(targetUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        },
-        body: formData.toString(),
+      Object.entries(payloadObj).forEach(([k, v]) => {
+        formData.append(k, v);
       });
+      formData.append('payload', JSON.stringify(payloadObj));
+      formData.append('data', JSON.stringify(payloadObj));
+
+      await Promise.allSettled([
+        fetch(targetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          body: formData.toString(),
+        }),
+        fetch(targetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'text/plain;charset=UTF-8',
+          },
+          body: JSON.stringify(payloadObj),
+        }),
+      ]);
     } catch (err) {
       console.error('Lỗi gửi form:', err);
     } finally {

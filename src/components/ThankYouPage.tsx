@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react';
-import { ArrowLeft, Clock, ShieldCheck, ExternalLink, Sprout, ChevronUp, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Clock, ShieldCheck, ExternalLink, Sprout, ChevronUp, Sparkles } from 'lucide-react';
 
 interface ThankYouPageProps {
   userName?: string;
@@ -183,63 +183,46 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({ userName, onBackToHo
             </div>
           </div>
 
-          {/* CTA Button - Bấm vào nhóm Zalo kín */}
-          <a
-            href={zaloGroupLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-4 px-5 rounded-2xl bg-[#FA5B13] hover:bg-[#DD4900] text-white font-extrabold text-base sm:text-lg shadow-lg shadow-[#FA5B13]/30 transition-all flex flex-col items-center justify-center text-center cursor-pointer active:scale-98 group"
-          >
-            <span className="flex items-center justify-center gap-2">
-              <span>👉 BẤM ĐỂ VÀO NHÓM ZALO KÍN</span>
-              <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
-            </span>
-            <span className="text-xs font-medium text-white/90 mt-0.5">
-              (Bấm ngay để ban tổ chức kiểm duyệt & nhận trọn bộ Ebook)
-            </span>
-          </a>
-
-          {/* 3 Bước nhận quà tóm gọn */}
-          <div className="pt-1 text-left text-xs sm:text-sm text-neutral-600 bg-neutral-50 p-3.5 rounded-xl border border-neutral-200/80 space-y-1.5">
-            <div className="flex items-center gap-2 font-bold text-neutral-800">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>3 Bước Hoàn Tất Nhanh:</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs text-neutral-700">
-              <div className="bg-white p-2 rounded-lg border border-neutral-200">
-                <span className="font-bold text-[#FA5B13]">1.</span> Bấm nút cam để vào nhóm Zalo
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-neutral-200">
-                <span className="font-bold text-[#FA5B13]">2.</span> Duyệt giữ chỗ trong 3 phút
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-neutral-200">
-                <span className="font-bold text-[#FA5B13]">3.</span> Đọc tin ghim nhận Ebook & Zoom
-              </div>
-            </div>
-          </div>
-
-          {/* QR Code Section - Gọn gàng */}
-          <div className="pt-2 flex flex-col items-center text-center space-y-2">
-            <span className="text-xs sm:text-sm font-semibold text-neutral-600">
-              Hoặc mở ứng dụng Zalo quét mã QR:
+          {/* MÃ QR NHÓM ZALO - ĐẶT TRÊN NÚT THAM GIA */}
+          <div className="pt-2 flex flex-col items-center text-center space-y-2.5">
+            <span className="text-xs sm:text-sm font-semibold text-neutral-700">
+              Mở ứng dụng Zalo quét mã QR để vào nhóm kín:
             </span>
 
-            <div className="p-2.5 bg-white rounded-2xl border border-neutral-200 shadow-sm inline-block">
+            <div className="p-3 bg-white rounded-2xl border border-neutral-200/90 shadow-md inline-block">
               <img
                 src="/assets/aistudio/image_0b59f36d.png"
                 alt="Mã QR Nhóm Zalo Kín Dũng Gieo Hạt"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = qrBackupUrl;
                 }}
-                className="w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] object-contain rounded-xl"
+                className="w-44 h-44 sm:w-48 sm:h-48 object-contain rounded-xl"
               />
             </div>
 
-            <p className="text-xs font-semibold text-neutral-800">
-              Quét mã QR 👆 bằng Zalo điện thoại để vào nhóm ngay
+            <p className="text-xs text-neutral-500">
+              Hoặc bấm nút cam bên dưới nếu bạn đang dùng điện thoại:
             </p>
+          </div>
 
-            <div className="inline-flex items-center gap-1.5 text-[11px] text-neutral-500">
+          {/* NÚT THAM GIA NHÓM ZALO KÍN */}
+          <div className="space-y-2">
+            <a
+              href={zaloGroupLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-4 px-5 rounded-2xl bg-[#FA5B13] hover:bg-[#DD4900] text-white font-extrabold text-base sm:text-lg shadow-lg shadow-[#FA5B13]/30 transition-all flex flex-col items-center justify-center text-center cursor-pointer active:scale-98 group"
+            >
+              <span className="flex items-center justify-center gap-2">
+                <span>👉 BẤM ĐỂ VÀO NHÓM ZALO KÍN</span>
+                <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+              </span>
+              <span className="text-xs font-medium text-white/90 mt-0.5">
+                (Bấm ngay để ban tổ chức kiểm duyệt & nhận trọn bộ Ebook)
+              </span>
+            </a>
+
+            <div className="inline-flex items-center justify-center gap-1.5 text-[11px] text-neutral-500 pt-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
               <span>Kênh chính thức do Dũng Gieo Hạt trực tiếp quản trị</span>
             </div>

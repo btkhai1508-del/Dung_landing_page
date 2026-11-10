@@ -1,11 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sprout,
   ArrowRight,
   ArrowLeft,
-  Volume2,
-  Volume1,
-  VolumeX,
   Plus,
 } from 'lucide-react';
 
@@ -48,6 +45,7 @@ interface FormData {
   obstacles: string[];
   obstacleOther: string;
   supportMethods: string[];
+  wantGiftSolution: 'Có' | 'Không';
 
   // Trang 6: Nhận bản đồ
   phone: string;
@@ -67,20 +65,21 @@ const INITIAL_DATA: FormData = {
   includeRelatives: false,
   relatives: [],
   wheelScores: {
-    health: 7,
-    family: 7,
-    finance: 6,
-    career: 6,
-    relationships: 7,
-    selfDevelopment: 6,
-    spirituality: 6,
-    community: 5,
+    health: 0,
+    family: 0,
+    finance: 0,
+    career: 0,
+    relationships: 0,
+    selfDevelopment: 0,
+    spirituality: 0,
+    community: 0,
   },
   priorityArea: 'Sức Khỏe',
   desireChange: '',
   obstacles: [],
   obstacleOther: '',
   supportMethods: [],
+  wantGiftSolution: 'Có',
   phone: '',
   email: '',
   deliveryChannels: ['Zalo'],
@@ -169,14 +168,87 @@ function calculateLifePath(birthDateStr: string): number {
   return sum;
 }
 
-// 3 mức âm lượng: Vừa (medium ~ 0.35), Nhỏ (low ~ 0.15), Tắt (mute = 0)
-type VolumeLevel = 'medium' | 'low' | 'mute';
+// Helper tính thông tin cơ bản Lá số Tử Vi & Ngũ hành từ ngày sinh
+interface TuViInfo {
+  canChiNam: string;
+  nguHanh: string;
+  cungMenh: string;
+  conSoChuDao: number;
+  amDuong: string;
+  namSinh: number;
+  cungMenhViTri: string;
+  cungThanViTri: string;
+  tinhChatMenh: string;
+  taiBach: string;
+  phuThe: string;
+}
 
-const VOLUME_VALUES: Record<VolumeLevel, number> = {
-  medium: 0.35,
-  low: 0.15,
-  mute: 0,
-};
+function calculateTuVi(birthDateStr: string, gender: string = 'Nam'): TuViInfo {
+  if (!birthDateStr) {
+    return {
+      canChiNam: 'Giáp Thìn',
+      nguHanh: 'Hỏa (Phú Đăng Hỏa)',
+      cungMenh: 'Chấn (Mộc) - Đông Tứ Mệnh',
+      conSoChuDao: 9,
+      amDuong: 'Dương Nam',
+      namSinh: 2024,
+      cungMenhViTri: 'Cung Thìn',
+      cungThanViTri: 'Thân cư Mệnh',
+      tinhChatMenh: 'Nội lực kiên định, giàu lòng vị tha và tinh thần trách nhiệm',
+      taiBach: 'Tích lũy tài chính bền vững, hanh thông khi làm việc bằng tâm',
+      phuThe: 'Đồng điệu tư duy, cùng vun đắp nền tảng gia đình hạnh phúc',
+    };
+  }
+
+  const parts = birthDateStr.split('-');
+  const year = parseInt(parts[0], 10) || 1990;
+  const month = parseInt(parts[1], 10) || 1;
+
+  const CANS = ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý'];
+  const CHIS = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi'];
+
+  const canIndex = ((year - 4) % 10 + 10) % 10;
+  const chiIndex = ((year - 4) % 12 + 12) % 12;
+
+  const can = CANS[canIndex];
+  const chi = CHIS[chiIndex];
+  const canChiNam = `${can} ${chi}`;
+
+  const canVal = Math.floor(canIndex / 2) + 1;
+  const chiVal = [0, 0, 1, 1, 2, 2, 0, 0, 1, 1, 2, 2][chiIndex];
+
+  let menhVal = canVal + chiVal;
+  if (menhVal > 5) menhVal -= 5;
+  const MENH = ['', 'Kim (Hải Trung Kim)', 'Thủy (Giản Hạ Thủy)', 'Hỏa (Lư Trung Hỏa)', 'Thổ (Lộ Bàng Thổ)', 'Mộc (Đại Lâm Mộc)'];
+  const nguHanh = MENH[menhVal] || 'Thổ (Lộ Bàng Thổ)';
+
+  const isDuong = canIndex % 2 === 0;
+  const amDuong = `${isDuong ? 'Dương' : 'Âm'} ${gender === 'Nữ' ? 'Nữ' : 'Nam'}`;
+
+  const sumDigits = String(year).split('').reduce((s, d) => s + parseInt(d, 10), 0);
+  const remainder = sumDigits % 9 || 9;
+  const cungNam = ['', 'Khảm (Thủy) - Đông Tứ Mệnh', 'Ly (Hỏa) - Đông Tứ Mệnh', 'Cấn (Thổ) - Tây Tứ Mệnh', 'Đoài (Kim) - Tây Tứ Mệnh', 'Càn (Kim) - Tây Tứ Mệnh', 'Khôn (Thổ) - Tây Tứ Mệnh', 'Tốn (Mộc) - Đông Tứ Mệnh', 'Chấn (Mộc) - Đông Tứ Mệnh', 'Khôn (Thổ) - Tây Tứ Mệnh'];
+  const cungNu = ['', 'Cấn (Thổ) - Tây Tứ Mệnh', 'Càn (Kim) - Tây Tứ Mệnh', 'Đoài (Kim) - Tây Tứ Mệnh', 'Cấn (Thổ) - Tây Tứ Mệnh', 'Ly (Hỏa) - Đông Tứ Mệnh', 'Khảm (Thủy) - Đông Tứ Mệnh', 'Khôn (Thổ) - Tây Tứ Mệnh', 'Chấn (Mộc) - Đông Tứ Mệnh', 'Tốn (Mộc) - Đông Tứ Mệnh'];
+  const cungMenh = gender === 'Nữ' ? (cungNu[remainder] || 'Đoài (Kim) - Tây Tứ Mệnh') : (cungNam[remainder] || 'Khảm (Thủy) - Đông Tứ Mệnh');
+
+  const CUNG_NAMES = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi'];
+  const menhPos = ((2 + month - 1) % 12 + 12) % 12;
+  const thanPos = ((2 + month + 2) % 12 + 12) % 12;
+
+  return {
+    canChiNam,
+    nguHanh,
+    cungMenh,
+    conSoChuDao: calculateLifePath(birthDateStr),
+    amDuong,
+    namSinh: year,
+    cungMenhViTri: `Cung ${CUNG_NAMES[menhPos]}`,
+    cungThanViTri: `Thân cư ${CUNG_NAMES[thanPos]}`,
+    tinhChatMenh: 'Nội lực kiên định, giàu lòng vị tha và tinh thần trách nhiệm',
+    taiBach: 'Tích lũy tài chính bền vững, hanh thông khi làm việc bằng tâm',
+    phuThe: 'Đồng điệu tư duy, cùng vun đắp nền tảng gia đình hạnh phúc',
+  };
+}
 
 export const FamilyHappinessMap: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -185,82 +257,14 @@ export const FamilyHappinessMap: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
 
-  // Âm lượng 3 mức độ: Vừa -> Nhỏ -> Tắt (chỉ icon loa, không có chữ)
-  const [volumeLevel, setVolumeLevel] = useState<VolumeLevel>('medium');
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Khởi tạo và phát nhạc Piano thiền chill thực thụ
-  useEffect(() => {
-    // Đảm bảo đường dẫn luôn khớp dù deploy lên Render root domain hay subfolder
-    const baseUrl = import.meta.env.BASE_URL || '/';
-    const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-    // Nhạc thiền 432Hz thư giãn sâu, sóng não Theta, chuông xoay Tây Tạng
-    const audioUrl = `${cleanBase}audio/meditation-432hz.mp3`;
-
-    const audio = new Audio(audioUrl);
-    audio.loop = true;
-    audio.volume = VOLUME_VALUES.medium;
-    audioRef.current = audio;
-
-    // 1. Cố gắng tự động phát ngay khi vào trang
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        // Trình duyệt chặn autoplay khi chưa có tương tác -> bật ngay khi người dùng chạm/click/cuộn
-        const enableAudioOnGesture = () => {
-          if (audioRef.current && volumeLevel !== 'mute') {
-            audioRef.current.play().catch(() => {});
-          }
-          window.removeEventListener('click', enableAudioOnGesture);
-          window.removeEventListener('touchstart', enableAudioOnGesture);
-          window.removeEventListener('scroll', enableAudioOnGesture);
-          window.removeEventListener('keydown', enableAudioOnGesture);
-        };
-
-        window.addEventListener('click', enableAudioOnGesture, { once: true });
-        window.addEventListener('touchstart', enableAudioOnGesture, { once: true });
-        window.addEventListener('scroll', enableAudioOnGesture, { once: true });
-        window.addEventListener('keydown', enableAudioOnGesture, { once: true });
-      });
-    }
-
-    return () => {
-      audio.pause();
-      audio.src = '';
-      audioRef.current = null;
-    };
-  }, []);
-
-  // Chuyển đổi 3 mức độ âm lượng: Vừa -> Nhỏ -> Tắt -> Vừa
-  const cycleVolume = () => {
-    let nextLevel: VolumeLevel;
-    if (volumeLevel === 'medium') {
-      nextLevel = 'low';
-    } else if (volumeLevel === 'low') {
-      nextLevel = 'mute';
-    } else {
-      nextLevel = 'medium';
-    }
-
-    setVolumeLevel(nextLevel);
-
-    if (audioRef.current) {
-      if (nextLevel === 'mute') {
-        audioRef.current.muted = true;
-        audioRef.current.volume = 0;
-      } else {
-        audioRef.current.muted = false;
-        audioRef.current.volume = VOLUME_VALUES[nextLevel];
-        if (audioRef.current.paused) {
-          audioRef.current.play().catch(() => {});
-        }
-      }
-    }
-  };
+  // Trang thông báo quyền riêng tư & xin sự đồng ý
+  const [isPrivacyStep, setIsPrivacyStep] = useState<boolean>(false);
+  const [privacyConsent, setPrivacyConsent] = useState<boolean>(false);
+  const [privacyError, setPrivacyError] = useState<string>('');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [currentStep, isCompleted]);
+  }, [currentStep, isCompleted, isPrivacyStep]);
 
   const headingClass = 'font-playfair-heading italic font-medium';
 
@@ -282,12 +286,18 @@ export const FamilyHappinessMap: React.FC = () => {
           errs.relatives = 'Vui lòng thêm ít nhất một người thân hoặc chọn "Không"';
         } else {
           formData.relatives.forEach((rel, idx) => {
-            if (!rel.name.trim()) errs[`rel_name_${idx}`] = 'Vui lòng nhập tên người thân';
             if (!rel.relationship.trim()) errs[`rel_rel_${idx}`] = 'Vui lòng nhập mối quan hệ';
             if (!rel.birthDate) errs[`rel_dob_${idx}`] = 'Vui lòng chọn ngày sinh';
             if (!rel.gender) errs[`rel_gender_${idx}`] = 'Vui lòng chọn giới tính';
           });
         }
+      }
+    }
+
+    if (step === 4) {
+      const missing = LIFE_AREAS.filter((a) => !formData.wheelScores[a.key as keyof typeof formData.wheelScores]);
+      if (missing.length > 0) {
+        errs.wheelScores = 'Vui lòng tự chấm điểm cho đầy đủ cả 8 khía cạnh trước khi tiếp tục.';
       }
     }
 
@@ -310,10 +320,6 @@ export const FamilyHappinessMap: React.FC = () => {
         }
       }
 
-      if (formData.deliveryChannels.length === 0) {
-        errs.deliveryChannels = 'Vui lòng chọn ít nhất một kênh nhận bản đồ';
-      }
-
       if (!formData.consent) {
         errs.consent = 'Vui lòng xác nhận đồng ý để hệ thống lập bản đồ';
       }
@@ -330,6 +336,11 @@ export const FamilyHappinessMap: React.FC = () => {
   };
 
   const handlePrev = () => {
+    if (currentStep === 2) {
+      setIsPrivacyStep(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
@@ -342,45 +353,154 @@ export const FamilyHappinessMap: React.FC = () => {
       // Lưu thông tin form bando vào Tabs sheet "Quà Tặng Tầng 1" theo đúng yêu cầu
       const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVvzC75rDJbWAJ-J-xHxG34x0MAsrJvvFAfnNKh_0PVN7YfqK9y1ttFKYHoZtKYzVghA/exec';
       const targetSheet = 'Quà Tặng Tầng 1';
-      const targetUrl = `${GOOGLE_SCRIPT_URL}?sheet=${encodeURIComponent(targetSheet)}&tab=${encodeURIComponent(targetSheet)}`;
+      const targetUrl = `${GOOGLE_SCRIPT_URL}?sheet=${encodeURIComponent(targetSheet)}&tab=${encodeURIComponent(targetSheet)}&sheetName=${encodeURIComponent(targetSheet)}&targetSheet=${encodeURIComponent(targetSheet)}`;
+
+      // Tính toán điểm số Bánh xe hạnh phúc
+      const scores = formData.wheelScores;
+      const wheelValues = Object.values(scores);
+      const totalScore = wheelValues.reduce((sum, val) => sum + val, 0);
+      const avgScore = (totalScore / wheelValues.length).toFixed(1);
+      const wheelSummary = `Sức Khỏe: ${scores.health}/10 | Gia Đình: ${scores.family}/10 | Tài Chính: ${scores.finance}/10 | Sự Nghiệp: ${scores.career}/10 | Mối Quan Hệ: ${scores.relationships}/10 | Phát Triển Bản Thân: ${scores.selfDevelopment}/10 | Tinh Thần & Nội Tâm: ${scores.spirituality}/10 | Đóng Góp Xã Hội: ${scores.community}/10 (TB: ${avgScore}/10)`;
+
+      // Danh sách rào cản gộp cả mục Khác nếu có
+      const allObstacles = [...formData.obstacles];
+      if (formData.obstacleOther && formData.obstacleOther.trim()) {
+        allObstacles.push(`Khác: ${formData.obstacleOther.trim()}`);
+      }
+      const obstaclesText = allObstacles.join(', ');
+
+      // Thông tin chi tiết người thân đi kèm
+      const relativesDetail =
+        formData.includeRelatives && formData.relatives.length > 0
+          ? formData.relatives
+              .map(
+                (r, i) =>
+                  `Người ${i + 1}: ${r.name || 'Chưa rõ'} (${r.relationship || 'Người thân'}, ${r.birthDate || 'Chưa rõ NS'}, ${r.gender || 'Chưa rõ GT'})`
+              )
+              .join('; ')
+          : 'Không có';
+
+      // Số chủ đạo thần số học & Tử vi bản mệnh
+      const lifePath = calculateLifePath(formData.birthDate);
+      const tuViData = calculateTuVi(formData.birthDate, formData.gender);
+
+      // Tạo object tổng hợp đầy đủ tất cả thông tin trong bando
+      const payloadObj: Record<string, string> = {
+        // Thông tin người điền
+        name: formData.fullName.trim(),
+        fullName: formData.fullName.trim(),
+        'Họ và tên': formData.fullName.trim(),
+        phone: formData.phone.trim(),
+        'Số điện thoại': formData.phone.trim(),
+        email: formData.email.trim(),
+        Email: formData.email.trim(),
+        birthDate: formData.birthDate,
+        'Ngày sinh': formData.birthDate,
+        birthTime: formData.birthTime || 'Không rõ',
+        'Giờ sinh': formData.birthTime || 'Không rõ',
+        gender: formData.gender,
+        'Giới tính': formData.gender,
+        city: formData.city.trim(),
+        'Tỉnh thành': formData.city.trim(),
+        occupation: formData.occupation.trim(),
+        'Nghề nghiệp': formData.occupation.trim(),
+        lifePathNumber: String(lifePath),
+        'Số chủ đạo': String(lifePath),
+        tuViCanChi: tuViData.canChiNam,
+        'Năm Can Chi': tuViData.canChiNam,
+        tuViNguHanh: tuViData.nguHanh,
+        'Bản Mệnh': tuViData.nguHanh,
+        tuViCungMenh: tuViData.cungMenh,
+        'Cung Mệnh': tuViData.cungMenh,
+
+        // Thông tin gia đình
+        familyTime: formData.familyTime,
+        'Thời gian cho gia đình': formData.familyTime,
+        includeRelatives: formData.includeRelatives ? 'Có' : 'Không',
+        'Có người thân đi kèm': formData.includeRelatives ? 'Có' : 'Không',
+        relatives: relativesDetail,
+        'Thông tin người thân': relativesDetail,
+
+        // Điểm số Bánh xe hạnh phúc
+        healthScore: String(scores.health),
+        'Sức Khỏe': `${scores.health}/10`,
+        familyScore: String(scores.family),
+        'Gia Đình': `${scores.family}/10`,
+        financeScore: String(scores.finance),
+        'Tài Chính': `${scores.finance}/10`,
+        careerScore: String(scores.career),
+        'Sự Nghiệp': `${scores.career}/10`,
+        relationshipsScore: String(scores.relationships),
+        'Mối Quan Hệ': `${scores.relationships}/10`,
+        selfDevelopmentScore: String(scores.selfDevelopment),
+        'Phát Triển Bản Thân': `${scores.selfDevelopment}/10`,
+        spiritualityScore: String(scores.spirituality),
+        'Tinh Thần & Nội Tâm': `${scores.spirituality}/10`,
+        communityScore: String(scores.community),
+        'Đóng Góp Xã Hội': `${scores.community}/10`,
+        averageScore: avgScore,
+        'Điểm trung bình bánh xe': `${avgScore}/10`,
+        wheelScores: wheelSummary,
+        'Bánh xe hạnh phúc': wheelSummary,
+
+        // Điều mong muốn & rào cản
+        priorityArea: formData.priorityArea,
+        'Lĩnh vực ưu tiên': formData.priorityArea,
+        desireChange: formData.desireChange ? formData.desireChange.trim() : '',
+        obstacles: obstaclesText,
+        'Rào cản lớn nhất': obstaclesText,
+        wantGiftSolution: formData.wantGiftSolution,
+        'Nhận quà tặng giải pháp chi tiết': formData.wantGiftSolution,
+        supportMethods: formData.supportMethods.join(', '),
+
+        // Nhận bản đồ
+        deliveryChannels: 'Zalo / Email / Messenger',
+        'Kênh nhận bản đồ': 'Zalo / Email / Messenger',
+        consent: formData.consent ? 'Đồng ý' : 'Chưa',
+
+        // Nhận diện tab sheet "Quà Tặng Tầng 1"
+        sheet: targetSheet,
+        sheetName: targetSheet,
+        sheet_name: targetSheet,
+        tab: targetSheet,
+        tabName: targetSheet,
+        tab_name: targetSheet,
+        targetSheet: targetSheet,
+        target_sheet: targetSheet,
+        type: targetSheet,
+        action: targetSheet,
+        form: 'bando',
+        formType: 'BAN_DO_HANH_PHUC',
+        timestamp: new Date().toLocaleString('vi-VN'),
+        'Thời gian gửi': new Date().toLocaleString('vi-VN'),
+      };
 
       const formDataToSend = new URLSearchParams();
-      formDataToSend.append('name', formData.fullName.trim());
-      formDataToSend.append('fullName', formData.fullName.trim());
-      formDataToSend.append('phone', formData.phone.trim());
-      formDataToSend.append('email', formData.email.trim());
-      formDataToSend.append('birthDate', formData.birthDate);
-      formDataToSend.append('birthTime', formData.birthTime || 'Không rõ');
-      formDataToSend.append('gender', formData.gender);
-      formDataToSend.append('city', formData.city.trim());
-      formDataToSend.append('occupation', formData.occupation.trim());
-      formDataToSend.append('familyTime', formData.familyTime);
-      formDataToSend.append('priorityArea', formData.priorityArea);
-      formDataToSend.append('desireChange', formData.desireChange.trim());
-      formDataToSend.append('obstacles', formData.obstacles.join(', '));
-      formDataToSend.append('supportMethods', formData.supportMethods.join(', '));
-      formDataToSend.append('deliveryChannels', formData.deliveryChannels.join(', '));
-      formDataToSend.append(
-        'relatives',
-        formData.relatives.map((r) => `${r.name} (${r.relationship}, ${r.birthDate})`).join('; ')
-      );
-      formDataToSend.append('sheet', targetSheet);
-      formDataToSend.append('sheetName', targetSheet);
-      formDataToSend.append('tab', targetSheet);
-      formDataToSend.append('tabName', targetSheet);
-      formDataToSend.append('targetSheet', targetSheet);
-      formDataToSend.append('type', targetSheet);
-      formDataToSend.append('formType', 'BAN_DO_HANH_PHUC');
-      formDataToSend.append('timestamp', new Date().toLocaleString('vi-VN'));
-
-      await fetch(targetUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        },
-        body: formDataToSend.toString(),
+      Object.entries(payloadObj).forEach(([k, v]) => {
+        formDataToSend.append(k, v);
       });
+      formDataToSend.append('payload', JSON.stringify(payloadObj));
+      formDataToSend.append('data', JSON.stringify(payloadObj));
+
+      // Gửi đồng thời theo dạng urlencoded (chuẩn Google Apps Script) và JSON text/plain
+      await Promise.allSettled([
+        fetch(targetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          body: formDataToSend.toString(),
+        }),
+        fetch(targetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'text/plain;charset=UTF-8',
+          },
+          body: JSON.stringify(payloadObj),
+        }),
+      ]);
     } catch (err) {
       console.log('Submission note:', err);
     } finally {
@@ -445,6 +565,7 @@ export const FamilyHappinessMap: React.FC = () => {
   };
 
   const userLifePath = useMemo(() => calculateLifePath(formData.birthDate), [formData.birthDate]);
+  const tuViInfo = useMemo(() => calculateTuVi(formData.birthDate, formData.gender), [formData.birthDate, formData.gender]);
 
   const radarPoints = useMemo(() => {
     const scores = [
@@ -482,7 +603,7 @@ export const FamilyHappinessMap: React.FC = () => {
       {/* ======================================================== */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
         {Object.entries(STEP_BACKGROUNDS).map(([k, item]) => {
-          const active = isCompleted ? k === '7' : Number(k) === currentStep;
+          const active = isCompleted ? k === '7' : isPrivacyStep ? k === '1' : Number(k) === currentStep;
           return (
             <img
               key={k}
@@ -524,43 +645,18 @@ export const FamilyHappinessMap: React.FC = () => {
             </div>
           </div>
 
-          {/* Right controls: Loa 3 mức độ (Vừa / Nhỏ / Tắt) + Tiến trình */}
+          {/* Right controls: Tiến trình */}
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Nút loa 3 mức độ (Vừa -> Nhỏ -> Tắt mute, chỉ icon loa, không có chữ) */}
-            <button
-              type="button"
-              onClick={cycleVolume}
-              className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all cursor-pointer border shadow-sm ${
-                volumeLevel === 'medium'
-                  ? 'bg-[#FA5B13]/30 text-[#FFA877] border-[#FA5B13] shadow-md ring-2 ring-[#FA5B13]/40'
-                  : volumeLevel === 'low'
-                  ? 'bg-white/20 text-white border-white/40 hover:bg-white/30'
-                  : 'bg-white/10 text-white/80 border-white/25 hover:bg-white/20'
-              }`}
-              title={
-                volumeLevel === 'medium'
-                  ? 'Âm lượng vừa (Bấm để giảm nhỏ)'
-                  : volumeLevel === 'low'
-                  ? 'Âm lượng nhỏ (Bấm để tắt âm)'
-                  : 'Đang tắt âm (Bấm để bật âm lượng vừa)'
-              }
-              aria-label={`Âm lượng: ${volumeLevel === 'medium' ? 'Vừa' : volumeLevel === 'low' ? 'Nhỏ' : 'Tắt tiếng'}`}
-            >
-              {volumeLevel === 'medium' && <Volume2 className="w-5 h-5 text-[#FFA877]" />}
-              {volumeLevel === 'low' && <Volume1 className="w-5 h-5 text-white" />}
-              {volumeLevel === 'mute' && <VolumeX className="w-5 h-5 text-white/80" />}
-            </button>
-
             {/* Step progress */}
             {!isCompleted && (
               <div className="hidden sm:flex items-center gap-2.5">
                 <span className="text-sm font-bold text-white">
-                  {currentStep}/6
+                  {isPrivacyStep ? 'Quyền riêng tư' : `${currentStep}/6`}
                 </span>
                 <div className="w-24 bg-white/25 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-[#FA5B13] h-full transition-all duration-300 rounded-full"
-                    style={{ width: `${(currentStep / 6) * 100}%` }}
+                    style={{ width: isPrivacyStep ? '15%' : `${(currentStep / 6) * 100}%` }}
                   />
                 </div>
               </div>
@@ -573,7 +669,7 @@ export const FamilyHappinessMap: React.FC = () => {
           <div className="sm:hidden w-full bg-white/15 h-1.5">
             <div
               className="bg-[#FA5B13] h-full transition-all duration-300"
-              style={{ width: `${(currentStep / 6) * 100}%` }}
+              style={{ width: isPrivacyStep ? '15%' : `${(currentStep / 6) * 100}%` }}
             />
           </div>
         )}
@@ -584,9 +680,14 @@ export const FamilyHappinessMap: React.FC = () => {
       {/* ======================================================== */}
       <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto px-4 sm:px-8 py-8 sm:py-12">
         {/* DÒNG TRÍCH DẪN DANCING SCRIPT TRÊN NỀN ẢNH VŨ TRỤ/THIÊN NHIÊN (CHỮ LỚN) */}
-        <div key={`quote-${isCompleted ? 7 : currentStep}`} className="mb-8 pb-4 border-b border-white/15 text-center sm:text-left animate-fade">
+        <div key={`quote-${isCompleted ? 7 : isPrivacyStep ? 'privacy' : currentStep}`} className="mb-8 pb-4 border-b border-white/15 text-center sm:text-left animate-fade">
+          {currentStep === 1 && !isPrivacyStep && !isCompleted && (
+            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-widest uppercase mb-2 font-be-vietnam drop-shadow-lg">
+              QUÀ TẶNG
+            </h2>
+          )}
           <p className="font-dancing-script text-2xl sm:text-3xl text-[#FFA877] leading-relaxed [text-wrap:balance] drop-shadow-md">
-            {activeBgInfo.quote}
+            {isPrivacyStep ? '“Sự tôn trọng và thấu hiểu luôn bắt đầu từ niềm tin và sự chân thành.”' : activeBgInfo.quote}
           </p>
         </div>
 
@@ -610,6 +711,104 @@ export const FamilyHappinessMap: React.FC = () => {
               <p className="text-base sm:text-lg text-white leading-relaxed font-normal pt-1">
                 Cảm ơn bạn <strong className="font-bold text-white">{formData.fullName}</strong> đã dành thời gian nhìn lại chính mình và gia đình.
               </p>
+            </div>
+
+            {/* THÔNG BÁO NHẬN QUÀ TRONG VÒNG 24H */}
+            <div className="p-6 rounded-2xl bg-gradient-to-r from-[#FA5B13]/25 via-amber-500/20 to-[#FA5B13]/25 border-2 border-[#FA5B13] backdrop-blur-md text-center shadow-xl">
+              <div className="text-3xl sm:text-4xl mb-2">🎁</div>
+              <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 font-be-vietnam">
+                Bạn Vui Lòng Kiểm Tra Zalo / Email / Messenger
+              </h3>
+              <p className="text-base sm:text-lg text-[#FFA877] font-semibold leading-relaxed">
+                Để nhận toàn bộ quà tặng và báo cáo bản đồ giải pháp chi tiết trong vòng <span className="text-white underline font-extrabold">24h</span>
+              </p>
+            </div>
+
+            {/* THÔNG TIN CƠ BẢN BAN ĐẦU */}
+            <div className="p-6 rounded-2xl bg-black/40 border border-white/15 backdrop-blur-md space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-white/15">
+                <span className="text-xs sm:text-sm font-bold text-[#FFA877] uppercase tracking-widest">
+                  THÔNG TIN CƠ BẢN BAN ĐẦU
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-sm sm:text-base">
+                <div className="flex justify-between py-1.5 border-b border-white/10">
+                  <span className="text-white/70">Họ và tên:</span>
+                  <span className="font-bold text-white">{formData.fullName}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/10">
+                  <span className="text-white/70">Giới tính:</span>
+                  <span className="font-bold text-white">{formData.gender}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/10">
+                  <span className="text-white/70">Ngày sinh (Dương lịch):</span>
+                  <span className="font-bold text-white">{formData.birthDate}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/10">
+                  <span className="text-white/70">Giờ sinh:</span>
+                  <span className="font-bold text-white">{formData.birthTime || 'Không rõ'}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/10">
+                  <span className="text-white/70">Nơi sinh sống:</span>
+                  <span className="font-bold text-white">{formData.city || 'Chưa cập nhật'}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/10">
+                  <span className="text-white/70">Nghề nghiệp:</span>
+                  <span className="font-bold text-white">{formData.occupation || 'Chưa cập nhật'}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/10">
+                  <span className="text-white/70">Số điện thoại / Zalo:</span>
+                  <span className="font-bold text-[#FFA877]">{formData.phone}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/10">
+                  <span className="text-white/70">Email nhận tin:</span>
+                  <span className="font-bold text-white">{formData.email || 'Không có'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* BẢNG TỬ VI & BẢN MỆNH CÁ NHÂN */}
+            <div className="p-6 rounded-2xl bg-black/40 border border-white/15 backdrop-blur-md space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-white/15">
+                <span className="text-xs sm:text-sm font-bold text-[#FFA877] uppercase tracking-widest">
+                  BẢNG TỬ VI & BẢN MỆNH CÁ NHÂN
+                </span>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded bg-[#FA5B13]/30 text-[#FFA877] border border-[#FA5B13]/50">
+                  {tuViInfo.amDuong}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-sm sm:text-base">
+                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                  <span className="text-xs uppercase tracking-wider text-white/60 block">Năm Sinh Can Chi</span>
+                  <span className="text-base sm:text-lg font-bold text-white block">{tuViInfo.canChiNam} ({tuViInfo.namSinh})</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                  <span className="text-xs uppercase tracking-wider text-white/60 block">Bản Mệnh (Ngũ Hành Nạp Âm)</span>
+                  <span className="text-base sm:text-lg font-bold text-[#FFA877] block">{tuViInfo.nguHanh}</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                  <span className="text-xs uppercase tracking-wider text-white/60 block">Cung Phi Bát Trạch</span>
+                  <span className="text-base sm:text-lg font-bold text-white block">{tuViInfo.cungMenh}</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                  <span className="text-xs uppercase tracking-wider text-white/60 block">Con Số Đường Đời (Thần Số Học)</span>
+                  <span className="text-base sm:text-lg font-bold text-[#FA5B13] block">Số {userLifePath}</span>
+                </div>
+                <div className="sm:col-span-2 p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                  <span className="text-xs uppercase tracking-wider text-white/60 block">Vị Trí Cung Mệnh & Thân</span>
+                  <p className="text-sm sm:text-base text-white">
+                    <strong className="text-[#FFA877]">{tuViInfo.cungMenhViTri}</strong> &bull; <strong className="text-[#FFA877]">{tuViInfo.cungThanViTri}</strong> &bull; {tuViInfo.tinhChatMenh}
+                  </p>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                  <span className="text-xs uppercase tracking-wider text-white/60 block">Cung Phu Thê (Gia Đạo)</span>
+                  <span className="text-sm sm:text-base text-white/90 block">{tuViInfo.phuThe}</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                  <span className="text-xs uppercase tracking-wider text-white/60 block">Cung Tài Bạch</span>
+                  <span className="text-sm sm:text-base text-white/90 block">{tuViInfo.taiBach}</span>
+                </div>
+              </div>
             </div>
 
             {/* Radar Diagram & Analysis */}
@@ -701,49 +900,12 @@ export const FamilyHappinessMap: React.FC = () => {
                 })}
               </div>
             </div>
-
-            {/* NUMEROLOGY LIFE PATH */}
-            {userLifePath > 0 && (
-              <div className="space-y-3.5 py-5 p-6 rounded-2xl bg-black/40 border border-white/15 backdrop-blur-md">
-                <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-widest block">
-                  THẦN SỐ HỌC & TẦN SỐ NĂNG LƯỢNG
-                </span>
-                
-                {/* Tiêu đề kết hợp badge non-breaking Số 9 */}
-                <div className="flex flex-wrap items-baseline gap-2.5">
-                  <h3 className={`text-2xl sm:text-3xl text-white font-bold ${headingClass}`}>
-                    Con Số Đường Đời Của Bạn:
-                  </h3>
-                  <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-[#FA5B13] text-white border border-[#FA5B13] font-be-vietnam font-bold text-lg sm:text-xl whitespace-nowrap shadow-md">
-                    Số&nbsp;{userLifePath}
-                  </span>
-                </div>
-
-                <p className="text-base sm:text-lg text-white leading-relaxed font-normal">
-                  Năng lượng ngày sinh {formData.birthDate} cho thấy bạn mang bài học đường đời số {userLifePath} với những tiềm năng phát triển và sự gắn kết gia đình. Bản phân tích đầy đủ và chi tiết sẽ được gửi trực tiếp đến bạn qua{' '}
-                  <strong className="text-white font-bold">{formData.deliveryChannels.join(', ')}</strong> ({formData.phone}).
-                </p>
-              </div>
-            )}
-
-            {/* Next Action */}
-            <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center gap-4">
-              <a
-                href="https://zalo.me/g/jgxfxq6uu7xuuobade3o"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto px-9 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-base sm:text-lg flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-lg shadow-[#FA5B13]/30 active:scale-95"
-              >
-                <span>Vào Nhóm Zalo Nhận Bản Đồ Đầy Đủ</span>
-                <ArrowRight className="w-5 h-5" />
-              </a>
-            </div>
           </div>
         ) : (
           /* LINEAR MULTI-STEP QUESTIONS - CHỮ LỚN RÕ RÀNG */
           <div className="space-y-10">
             {/* TRANG 1: GIỚI THIỆU */}
-            {currentStep === 1 && (
+            {currentStep === 1 && !isPrivacyStep && (
               <div key="step-1" className="space-y-8 animate-fade">
                 <div className="space-y-3.5">
                   <div className="flex items-baseline gap-2.5">
@@ -764,7 +926,7 @@ export const FamilyHappinessMap: React.FC = () => {
                 <div className="space-y-4 py-5 border-y border-white/15 text-base sm:text-lg text-white">
                   <div className="flex items-start gap-3">
                     <span className="text-[#FA5B13] font-bold text-lg leading-none mt-1">•</span>
-                    <span><strong>Bánh xe hạnh phúc:</strong> Đo lường chính xác 8 khía cạnh cốt lõi trong đời sống.</span>
+                    <span><strong>Bánh xe hạnh phúc:</strong> Đo lường 8 khía cạnh cốt lõi trong đời sống hiện tại và giải pháp thay đổi để hạnh phúc hơn</span>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-[#FA5B13] font-bold text-lg leading-none mt-1">•</span>
@@ -783,10 +945,166 @@ export const FamilyHappinessMap: React.FC = () => {
                 <div className="pt-2">
                   <button
                     type="button"
-                    onClick={handleNext}
+                    onClick={() => {
+                      setIsPrivacyStep(true);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                     className="w-full sm:w-auto px-9 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-[#FA5B13]/30 active:scale-95"
                   >
                     <span>Bắt Đầu Trả Lời</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TRANG THÔNG BÁO QUYỀN RIÊNG TƯ & XIN SỰ ĐỒNG Ý */}
+            {isPrivacyStep && (
+              <div key="privacy-step" className="space-y-8 animate-fade font-be-vietnam">
+                {/* Header */}
+                <div className="space-y-2.5">
+                  <span className="text-xs sm:text-sm font-bold text-[#FFA877] uppercase tracking-widest block">
+                    BẢO MẬT & QUYỀN RIÊNG TƯ
+                  </span>
+                  <h1 className={`text-2xl sm:text-4xl text-white leading-[1.3] ${headingClass} [text-wrap:balance]`}>
+                    Quyền Riêng Tư Của Bạn Rất Quan Trọng
+                  </h1>
+                  <p className="text-base sm:text-lg text-white/85 leading-relaxed font-normal pt-1">
+                    Trước khi bắt đầu, chúng tôi muốn bạn biết rõ cách thông tin của mình được sử dụng và bảo vệ.
+                  </p>
+                </div>
+
+                {/* Nội dung chính sách đầy đủ - Trình bày trang trọng, thanh lịch, dễ đọc, không đóng hộp rườm rà */}
+                <div className="border-t border-b border-white/15 py-6 space-y-6 text-white/90 leading-relaxed">
+                  <div className="space-y-2">
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                      <span className="text-[#FA5B13] font-bold">1.</span>
+                      <span>Ai thực hiện khảo sát?</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-white/80 pl-5">
+                      [Tên pháp lý của cá nhân/doanh nghiệp: Dũng Gieo Hạt & Đội ngũ Chuyên gia Bản Đồ Hạnh Phúc], liên hệ tại [Email hoặc số điện thoại hỗ trợ: contact@dunggieohat.com / Zalo hỗ trợ].
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                      <span className="text-[#FA5B13] font-bold">2.</span>
+                      <span>Chúng tôi thu thập những gì?</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-white/80 pl-5">
+                      Thông tin bạn tự nguyện cung cấp về bản thân, ngày sinh, mức độ hài lòng với cuộc sống, mục tiêu cá nhân và cảm nhận về các mối quan hệ gia đình.
+                    </p>
+                    <p className="text-xs sm:text-sm text-white/70 italic pl-5">
+                      * Một số câu trả lời có thể chứa thông tin riêng tư hoặc dữ liệu cá nhân nhạy cảm. Bạn không cần cung cấp thông tin ngoài phạm vi mình cảm thấy phù hợp.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                      <span className="text-[#FA5B13] font-bold">3.</span>
+                      <span>Thông tin được dùng để làm gì?</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-white/80 pl-5">
+                      Tổng hợp câu trả lời, phân tích những lĩnh vực bạn muốn cải thiện, tạo và gửi bản báo cáo cá nhân hóa theo lựa chọn của bạn.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                      <span className="text-[#FA5B13] font-bold">4.</span>
+                      <span>AI có tham gia không?</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-white/80 pl-5">
+                      [Hệ thống kết hợp thuật toán AI hỗ trợ phân tích năng lượng ngày sinh và dữ liệu khảo sát để gợi ý giải pháp cải thiện cuộc sống. Dữ liệu của bạn được bảo mật tuyệt đối, không chia sẻ công khai và không dùng để huấn luyện mô hình bên ngoài].
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                      <span className="text-[#FA5B13] font-bold">5.</span>
+                      <span>Ai có thể tiếp cận dữ liệu?</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-white/80 pl-5">
+                      [Những bộ phận phân tích nội bộ, nhà cung cấp lưu trữ an toàn và chuyên gia phụ trách báo cáo]. Chúng tôi cam kết không bán hoặc chia sẻ thông tin của bạn cho bên thứ ba. Nếu có xử lý ở nước ngoài, chúng tôi sẽ thông tin về hoạt động này trong chính sách đầy đủ.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                      <span className="text-[#FA5B13] font-bold">6.</span>
+                      <span>Thông tin được lưu trong bao lâu?</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-white/80 pl-5">
+                      [Thời hạn thực tế cần thiết để lập và gửi bản đồ giải pháp cho bạn, thời điểm tính và ngoại lệ lưu giữ theo quy định pháp luật hoặc khi nhận được yêu cầu xóa từ bạn].
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                      <span className="text-[#FA5B13] font-bold">7.</span>
+                      <span>Bạn có những quyền gì?</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-white/80 pl-5">
+                      Bạn có quyền yêu cầu xem, chỉnh sửa, rút lại sự đồng ý, hạn chế xử lý, phản đối xử lý hoặc yêu cầu xóa dữ liệu của mình theo quy định pháp luật.
+                    </p>
+                    <p className="text-xs sm:text-sm text-[#FFA877] font-medium pl-5 pt-1">
+                      Liên hệ thực hiện quyền: [contact@dunggieohat.com hoặc Zalo hỗ trợ].
+                    </p>
+                  </div>
+
+                  <div className="pt-2 text-xs sm:text-sm text-white/70 italic pl-5">
+                    Bạn có thể đọc toàn bộ Chính sách bảo vệ dữ liệu cá nhân trước khi quyết định tham gia.
+                  </div>
+                </div>
+
+                {/* Checkbox Xin Sự Đồng Ý */}
+                <div className="space-y-2 pt-1">
+                  <label className="flex items-start gap-3.5 cursor-pointer text-base sm:text-lg text-white font-normal leading-relaxed select-none">
+                    <input
+                      type="checkbox"
+                      checked={privacyConsent}
+                      onChange={(e) => {
+                        setPrivacyConsent(e.target.checked);
+                        if (e.target.checked) setPrivacyError('');
+                      }}
+                      className="mt-1.5 accent-[#FA5B13] w-5 h-5 shrink-0"
+                    />
+                    <span className="[text-wrap:balance]">
+                      Tôi đã đọc, hiểu rõ và đồng ý cho phép thu thập, xử lý thông tin cá nhân theo đúng Chính sách Quyền riêng tư nêu trên.
+                    </span>
+                  </label>
+                  {privacyError && <p className="text-sm text-red-300 font-semibold pl-8">{privacyError}</p>}
+                </div>
+
+                {/* Action buttons */}
+                <div className="pt-6 border-t border-white/15 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPrivacyStep(false);
+                      setCurrentStep(1);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="w-full sm:w-auto text-base font-semibold text-white/80 hover:text-white inline-flex items-center justify-center gap-2 cursor-pointer transition-colors py-3 px-4 rounded-xl hover:bg-white/10"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                    <span>Quay lại trang giới thiệu</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!privacyConsent) {
+                        setPrivacyError('Vui lòng tích chọn đồng ý với Quyền riêng tư trước khi tiếp tục.');
+                        return;
+                      }
+                      setIsPrivacyStep(false);
+                      setCurrentStep(2);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="w-full sm:w-auto px-9 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-[#FA5B13]/30 active:scale-95"
+                  >
+                    <span>Đồng Ý & Tiếp Tục</span>
                     <ArrowRight className="w-5 h-5" />
                   </button>
                 </div>
@@ -824,6 +1142,10 @@ export const FamilyHappinessMap: React.FC = () => {
                       placeholder="Nguyễn Văn An"
                       className="w-full py-3 sm:py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white transition-all bg-black/35 backdrop-blur-xs placeholder:text-white/60"
                     />
+                    <div className="text-xs sm:text-sm text-white/90 italic font-normal leading-relaxed pl-3 border-l-2 border-[#FFA877] py-1 bg-white/5 rounded-r-lg">
+                      <span className="text-[#FFA877] font-semibold not-italic">* Lưu ý: </span>
+                      Nếu bạn muốn tính thêm các chỉ số như số sứ mệnh, linh hồn, nhân cách, biểu đạt thì tự nguyện điền họ tên khai sinh đầy đủ.
+                    </div>
                     {errors.fullName && <p className="text-sm text-red-300 font-medium">{errors.fullName}</p>}
                   </div>
 
@@ -1015,13 +1337,18 @@ export const FamilyHappinessMap: React.FC = () => {
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                            <input
-                              type="text"
-                              value={rel.name}
-                              onChange={(e) => updateRelative(idx, 'name', e.target.value)}
-                              placeholder="Họ tên hoặc tên gọi..."
-                              className="py-2.5 px-3.5 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-sm sm:text-base text-white bg-black/35 placeholder:text-white/60"
-                            />
+                            <div className="sm:col-span-2 space-y-1.5">
+                              <input
+                                type="text"
+                                value={rel.name}
+                                onChange={(e) => updateRelative(idx, 'name', e.target.value)}
+                                placeholder="Họ và tên người thân (không bắt buộc)..."
+                                className="w-full py-2.5 px-3.5 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-sm sm:text-base text-white bg-black/35 placeholder:text-white/60"
+                              />
+                              <p className="text-xs sm:text-sm text-white/75 italic pl-1">
+                                "Bạn cam kết đã được người thân đồng ý khảo sát, không bắt buộc ghi họ và tên chính xác"
+                              </p>
+                            </div>
                             <input
                               type="text"
                               value={rel.relationship}
@@ -1085,8 +1412,13 @@ export const FamilyHappinessMap: React.FC = () => {
                     Bánh Xe Hạnh Phúc Của Bạn
                   </h2>
                   <p className="text-base text-white pt-1 font-normal">
-                    Hãy tự chấm mức độ hài lòng hiện tại của bạn từ 1 (rất chưa hài lòng) đến 10 (rất hài lòng).
+                    Hãy tự cảm nhận mức độ hài lòng hiện tại của bạn từ 1 (rất chưa hài lòng) đến 10 (rất hài lòng).
                   </p>
+                  {errors.wheelScores && (
+                    <div className="p-3.5 rounded-xl bg-red-500/25 border border-red-500/50 text-red-200 text-sm sm:text-base font-semibold mt-2">
+                      {errors.wheelScores}
+                    </div>
+                  )}
                 </div>
 
                 <div className="divide-y divide-white/15 border-t border-white/15">
@@ -1104,7 +1436,11 @@ export const FamilyHappinessMap: React.FC = () => {
                             </p>
                           </div>
                           <span className="font-bold text-base sm:text-lg text-[#FFA877] shrink-0">
-                            {currentScore}&nbsp;/&nbsp;10
+                            {currentScore === 0 ? (
+                              <span className="text-white/60 text-sm font-normal italic">(Chưa chấm điểm)</span>
+                            ) : (
+                              `${currentScore} / 10`
+                            )}
                           </span>
                         </div>
 
@@ -1174,25 +1510,10 @@ export const FamilyHappinessMap: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Câu 18 */}
-                  <div className="space-y-2 pt-1">
-                    <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      18. Nếu cuộc sống tốt hơn sau 90 ngày, bạn mong điều gì cụ thể sẽ thay đổi?{' '}
-                      <span className="text-white font-normal text-sm sm:text-base">(không bắt buộc)</span>
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={formData.desireChange}
-                      onChange={(e) => setFormData({ ...formData, desireChange: e.target.value })}
-                      placeholder="Chia sẻ mong ước của bạn..."
-                      className="w-full py-3 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white bg-black/35 resize-none placeholder:text-white/60"
-                    />
-                  </div>
-
-                  {/* Câu 19: Rào cản */}
+                  {/* Câu 18: Rào cản */}
                   <div className="space-y-3 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      19. Điều gì đang cản trở bạn thay đổi? <span className="text-white font-normal text-sm sm:text-base">(chọn nhiều)</span>
+                      18. Điều gì đang cản trở bạn thay đổi? <span className="text-white font-normal text-sm sm:text-base">(chọn nhiều)</span>
                     </label>
                     <div className="flex flex-wrap gap-2.5">
                       {OBSTACLE_OPTIONS.map((item) => (
@@ -1212,26 +1533,34 @@ export const FamilyHappinessMap: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Câu 20: Cách hỗ trợ */}
+                  {/* Câu 19: Tặng thêm bộ quà tặng giải pháp chi tiết */}
                   <div className="space-y-3 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      20. Bạn muốn được hỗ trợ theo cách nào? <span className="text-white font-normal text-sm sm:text-base">(chọn nhiều)</span>
+                      19. Bạn có muốn nhận thêm bộ quà tặng giải pháp chi tiết cho vấn đề cá nhân của bạn không? <span className="text-[#FA5B13]">*</span>
                     </label>
-                    <div className="flex flex-wrap gap-2.5">
-                      {SUPPORT_OPTIONS.map((item) => (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => toggleSupport(item)}
-                          className={`px-4 py-2.5 rounded-xl text-sm sm:text-base font-medium transition-all cursor-pointer border ${
-                            formData.supportMethods.includes(item)
-                              ? 'bg-[#FA5B13] text-white border-[#FA5B13] shadow-md shadow-[#FA5B13]/30 scale-102'
-                              : 'bg-black/30 text-white border-white/30 hover:bg-black/50'
-                          }`}
-                        >
-                          {item}
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, wantGiftSolution: 'Có' })}
+                        className={`p-4 rounded-xl text-base sm:text-lg font-bold transition-all cursor-pointer flex items-center justify-center gap-2 border ${
+                          formData.wantGiftSolution === 'Có'
+                            ? 'bg-[#FA5B13] text-white border-[#FA5B13] shadow-lg shadow-[#FA5B13]/40 scale-102 ring-2 ring-white/30'
+                            : 'bg-black/35 hover:bg-black/50 text-white border-white/30'
+                        }`}
+                      >
+                        <span>✓ Có, tôi muốn nhận</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, wantGiftSolution: 'Không' })}
+                        className={`p-4 rounded-xl text-base sm:text-lg font-medium transition-all cursor-pointer flex items-center justify-center gap-2 border ${
+                          formData.wantGiftSolution === 'Không'
+                            ? 'bg-[#FA5B13] text-white border-[#FA5B13] shadow-lg shadow-[#FA5B13]/40 scale-102 ring-2 ring-white/30'
+                            : 'bg-black/35 hover:bg-black/50 text-white/80 border-white/30'
+                        }`}
+                      >
+                        <span>Không, cảm ơn</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1249,10 +1578,10 @@ export const FamilyHappinessMap: React.FC = () => {
                     </span>
                   </div>
                   <h2 className={`text-2xl sm:text-4xl text-white ${headingClass} [text-wrap:balance]`}>
-                    Nhận Bản Đồ Hạnh Phúc Của Bạn
+                    Nhận Giải Pháp Nâng Cao Hạnh Phúc
                   </h2>
                   <p className="text-base text-white pt-1 font-normal">
-                    Bản đồ cá nhân hóa sẽ được chuyên gia và AI tổng hợp gửi qua kênh bạn chọn dưới đây.
+                    Nhận bản đồ và tài liệu
                   </p>
                 </div>
 
@@ -1260,7 +1589,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* SĐT / Zalo */}
                   <div className="space-y-2">
                     <label className="block text-base sm:text-lg font-semibold text-white">
-                      21. Số điện thoại / Zalo để nhận báo cáo <span className="text-[#FA5B13]">*</span>
+                      20. Số điện thoại / Zalo để nhận báo cáo & quà tặng <span className="text-[#FA5B13]">*</span>
                     </label>
                     <input
                       type="tel"
@@ -1276,7 +1605,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Email */}
                   <div className="space-y-2 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white">
-                      22. Email <span className="text-white font-normal text-sm sm:text-base">(không bắt buộc)</span>
+                      21. Email <span className="text-white font-normal text-sm sm:text-base">(không bắt buộc)</span>
                     </label>
                     <input
                       type="email"
@@ -1288,32 +1617,15 @@ export const FamilyHappinessMap: React.FC = () => {
                     {errors.email && <p className="text-sm text-red-300 font-medium">{errors.email}</p>}
                   </div>
 
-                  {/* Kênh nhận */}
-                  <div className="space-y-2.5 pt-1">
-                    <label className="block text-base sm:text-lg font-semibold text-white">
-                      23. Bạn muốn nhận bản đồ và tài liệu qua kênh nào? <span className="text-[#FA5B13]">*</span>
-                    </label>
-                    <div className="flex flex-wrap gap-3">
-                      {['Zalo', 'Email', 'Messenger', 'Chỉ nhận bản đồ'].map((channel) => (
-                        <button
-                          key={channel}
-                          type="button"
-                          onClick={() => toggleChannel(channel)}
-                          className={`px-5 py-3 rounded-xl text-sm sm:text-base font-semibold transition-all cursor-pointer border ${
-                            formData.deliveryChannels.includes(channel)
-                              ? 'bg-[#FA5B13] text-white border-[#FA5B13] shadow-md shadow-[#FA5B13]/30 scale-102'
-                              : 'bg-black/30 text-white border-white/30 hover:bg-black/50'
-                          }`}
-                        >
-                          {channel}
-                        </button>
-                      ))}
-                    </div>
-                    {errors.deliveryChannels && <p className="text-sm text-red-300 font-medium">{errors.deliveryChannels}</p>}
+                  {/* Quote cam kết bảo mật & quyền dữ liệu cá nhân */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-black/45 border border-white/20 text-sm sm:text-base text-white/95 leading-relaxed font-normal shadow-inner">
+                    <p className="italic">
+                      "Chúng tôi cam kết thông tin được bảo mật 100% và chỉ dùng cho khảo sát giải pháp nâng cao hạnh phúc, bạn có thể từ chối cung cấp thông tin không bắt buộc và thực hiện các quyền liên quan đến dữ liệu cá nhân theo quy định pháp luật."
+                    </p>
                   </div>
 
                   {/* Đồng ý */}
-                  <div className="pt-2">
+                  <div className="pt-1">
                     <label className="flex items-start gap-3 cursor-pointer text-base sm:text-lg text-white font-normal leading-relaxed">
                       <input
                         type="checkbox"
@@ -1322,7 +1634,7 @@ export const FamilyHappinessMap: React.FC = () => {
                         className="mt-1 accent-[#FA5B13] w-5 h-5 shrink-0"
                       />
                       <span className="[text-wrap:balance]">
-                        Tôi đồng ý cho sử dụng thông tin trên để tạo báo cáo cá nhân hóa và gửi tài liệu phù hợp. (Thông tin được cam kết bảo mật 100%).
+                        Tôi đồng ý cho sử dụng thông tin trên để tạo báo cáo cá nhân hóa và gửi tài liệu phù hợp.
                       </span>
                     </label>
                     {errors.consent && <p className="text-sm text-red-300 font-medium mt-1">{errors.consent}</p>}
@@ -1339,7 +1651,7 @@ export const FamilyHappinessMap: React.FC = () => {
                         <span>Đang xử lý dữ liệu...</span>
                       ) : (
                         <>
-                          <span>Hoàn Tất & Xem Bản Đồ Hạnh Phúc</span>
+                          <span>Nhận Kết Quả & Quà Tặng</span>
                           <ArrowRight className="w-5 h-5" />
                         </>
                       )}

@@ -5,6 +5,7 @@ import {
   Menu,
   X,
   Sprout,
+  Compass,
 } from 'lucide-react';
 import { RegisterModal } from './RegisterModal';
 import { FigmaReferenceModal } from './FigmaReferenceModal';
@@ -15,6 +16,13 @@ export const StraightforwardLandingPage: React.FC = () => {
   const [isFigmaModalOpen, setIsFigmaModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isThankYouOpen, setIsThankYouOpen] = useState(false);
+
+  // Chuyển hướng ngay sang trang khảo sát /bando
+  const goToBando = () => {
+    window.history.pushState({}, '', '/bando');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // If user completed registration, render the dedicated Thank You Page
   if (isThankYouOpen) {
@@ -28,8 +36,8 @@ export const StraightforwardLandingPage: React.FC = () => {
     { id: 'sec-02', number: '02', label: '6 Quy luật vũ trụ' },
     { id: 'sec-03', number: '03', label: 'Ba góc nhìn chân lý' },
     { id: 'sec-04', number: '04', label: 'Tử vi & Vận mệnh' },
-    { id: 'sec-05', number: '05', label: 'Bộ quà tặng đổi đời' },
-    { id: 'sec-06', number: '06', label: 'Hành động ngay' },
+    { id: 'sec-05', number: '05', label: 'Giá trị khảo sát' },
+    { id: 'sec-06', number: '06', label: 'Khảo sát ngay' },
   ];
 
   const scrollTo = (id: string) => {
@@ -74,22 +82,22 @@ export const StraightforwardLandingPage: React.FC = () => {
           {/* Right Action Button */}
           <div className="hidden sm:flex items-center gap-3 shrink-0">
             <button
-              onClick={() => setIsRegisterOpen(true)}
+              onClick={goToBando}
               className="px-5 py-2.5 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-transform active:scale-95 cursor-pointer"
             >
-              <Gift className="w-4 h-4" />
-              <span>Nhận quà miễn phí</span>
+              <Compass className="w-4 h-4" />
+              <span>Khảo sát Bản Đồ ngay</span>
             </button>
           </div>
 
           {/* Mobile Right Action + Hamburger Toggle */}
           <div className="flex sm:hidden items-center gap-2">
             <button
-              onClick={() => setIsRegisterOpen(true)}
-              className="px-3 py-1.5 bg-[#FA5B13] text-white rounded-lg text-xs font-bold flex items-center gap-1"
+              onClick={goToBando}
+              className="px-3 py-1.5 bg-[#FA5B13] text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
             >
-              <Gift className="w-3.5 h-3.5" />
-              <span>Nhận Quà</span>
+              <Compass className="w-3.5 h-3.5" />
+              <span>Khảo Sát</span>
             </button>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -131,12 +139,12 @@ export const StraightforwardLandingPage: React.FC = () => {
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  setIsRegisterOpen(true);
+                  goToBando();
                 }}
                 className="w-full py-3 bg-[#FA5B13] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Gift className="w-4 h-4" />
-                <span>Nhận Quà Tặng Miễn Phí</span>
+                <Compass className="w-4 h-4" />
+                <span>Khảo sát Bản Đồ ngay</span>
               </button>
             </div>
           </div>
@@ -165,10 +173,15 @@ export const StraightforwardLandingPage: React.FC = () => {
                 KIẾN THỨC · TRẢI NGHIỆM · ỨNG DỤNG · THAY ĐỔI CUỘC SỐNG
               </div>
 
-              <h1 className={`text-3xl sm:text-4xl lg:text-5xl ${headingClass} leading-[1.25] text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)] [text-wrap:balance]`}>
-                <span className="block">Bạn Có Thể Thay Đổi Tương Lai</span>
-                <span className="block text-[#FFAB76] mt-1 underline decoration-white/30">Không Chỉ Là Số Phận</span>
-              </h1>
+              <div className="space-y-2">
+                <p className="text-base sm:text-xl text-[#FFA877] font-semibold tracking-wide drop-shadow-md">
+                  Tại Sao Có Người Cùng Lá Số Tử Vi Như Nhau Nhưng Cuộc Đời Lại Khác Biệt?
+                </p>
+                <h1 className={`text-3xl sm:text-4xl lg:text-5xl ${headingClass} leading-[1.25] text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)] [text-wrap:balance]`}>
+                  <span className="block">Bạn Có Thể Thay Đổi Tương Lai</span>
+                  <span className="block text-[#FFAB76] mt-1 underline decoration-white/30">Không Chỉ Là Số Phận</span>
+                </h1>
+              </div>
 
               <p className="text-base sm:text-lg text-gray-200 leading-relaxed font-be-vietnam max-w-xl">
                 Hiểu đúng về năng lượng, tần số rung động và các quy luật vận hành của vũ trụ để làm chủ lá số tử vi, sức khỏe, tài chính và các mối quan hệ và kiến tạo cuộc sống mà bạn mong muốn.
@@ -182,11 +195,11 @@ export const StraightforwardLandingPage: React.FC = () => {
               {/* CTA Button */}
               <div className="pt-2 flex flex-col sm:flex-row items-center gap-4">
                 <button
-                  onClick={() => setIsRegisterOpen(true)}
+                  onClick={goToBando}
                   className="w-full sm:w-auto px-8 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold text-base rounded-2xl shadow-xl flex items-center justify-center gap-2.5 transition-all transform hover:scale-[1.02] active:scale-95 cursor-pointer font-be-vietnam"
                 >
-                  <Gift className="w-5 h-5 text-white" />
-                  <span>NHẬN QUÀ TẶNG MIỄN PHÍ &gt;</span>
+                  <Compass className="w-5 h-5 text-white" />
+                  <span>KHẢO SÁT BẢN ĐỒ NGAY &gt;</span>
                 </button>
               </div>
             </div>
@@ -438,7 +451,7 @@ export const StraightforwardLandingPage: React.FC = () => {
               <div className="lg:col-span-7 space-y-5 font-be-vietnam">
                 <div className="p-6 rounded-2xl bg-white border border-gray-200 text-base text-gray-700 leading-relaxed space-y-3 shadow-xs">
                   <p>
-                    Lá số tử vi và số phận là có thật, nhưng nó chỉ đúng nhiều đối với những người sống phó mặc cho tự nhiên.
+                    Lá số tử vi và số phận là có thật, nhưng nó chỉ đúng nhiều đối với những người sống phó mặc cho hoàn cảnh cuộc sống.
                   </p>
                   <p className="font-semibold text-gray-900">
                     Còn những người thay đổi tư duy, làm chủ năng lượng, rèn luyện thói quen và hành động tích cực thì sẽ không bị ảnh hưởng nhiều bởi lá số tử vi hay số phận, thậm chí còn chuyển hóa được những vận hạn.
@@ -472,11 +485,11 @@ export const StraightforwardLandingPage: React.FC = () => {
 
                 <div className="pt-2">
                   <button
-                    onClick={() => setIsRegisterOpen(true)}
+                    onClick={goToBando}
                     className="px-6 py-3.5 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-sm shadow-md inline-flex items-center gap-2 cursor-pointer transition-transform active:scale-95 font-be-vietnam"
                   >
-                    <Gift className="w-4 h-4" />
-                    <span>NHẬN QUÀ TẶNG MIỄN PHÍ &gt;</span>
+                    <Compass className="w-4 h-4" />
+                    <span>KHẢO SÁT BẢN ĐỒ NGAY &gt;</span>
                   </button>
                 </div>
               </div>
@@ -493,91 +506,99 @@ export const StraightforwardLandingPage: React.FC = () => {
           </div>
         </section>
 
-        {/* SECTION 05: BỘ QUÀ TẶNG ĐẶC BIỆT */}
-        <section id="sec-05" className="px-6 sm:px-12 py-16 sm:py-24 bg-white border-b border-gray-200 relative">
-          <div className="max-w-5xl mx-auto space-y-10 relative z-10">
+        {/* SECTION 05: GIÁ TRỊ NHẬN ĐƯỢC TỪ BẢN ĐỒ HẠNH PHÚC */}
+        <section id="sec-05" className="px-6 sm:px-12 py-16 sm:py-24 bg-gradient-to-b from-white via-[#FFF9F5] to-white border-b border-gray-200 relative">
+          <div className="max-w-5xl mx-auto space-y-12 relative z-10">
             <div>
               <div className="flex items-baseline gap-3 mb-2">
                 <span className={`text-4xl font-bold text-[#FA5B13] ${headingClass}`}>05</span>
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest font-be-vietnam">
-                  Tài liệu chọn lọc
+                  KHẢO SÁT BẢN ĐỒ HẠNH PHÚC
                 </span>
               </div>
               <h2 className={`text-3xl sm:text-5xl font-bold text-gray-900 leading-snug ${headingClass}`}>
-                Bạn Sẽ Nhận Được Những Gì?
+                Nếu Bạn Làm Khảo Sát, Bạn Sẽ Nhận Được Điều Gì?
               </h2>
-              <p className="text-gray-600 mt-2 text-base font-be-vietnam">
-                Bộ quà tặng đặc biệt được chọn lọc, giúp bạn hiểu và thực hành để thay đổi cuộc sống nhanh chóng.
+              <p className="text-gray-600 mt-3 text-base sm:text-lg font-be-vietnam max-w-3xl leading-relaxed">
+                Chỉ khoảng <strong>5–7 phút</strong> tĩnh tâm nhìn lại chính mình, bạn sẽ nhận được một bản đồ định hướng may đo riêng cho cuộc đời của bạn và gia đình:
               </p>
             </div>
 
-            {/* 5 Ebooks with External Source Images */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* 4 Giá Trị Nhận Được Khi Khảo Sát */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
               {[
                 {
-                  id: 1,
-                  title: '7 Quy Luật Thay Đổi Cuộc Đời',
-                  desc: 'Hiểu các quy luật vận hành của vũ trụ và cách ứng dụng',
-                  img: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
+                  number: '01',
+                  title: 'Đo Lường Chuẩn Xác 8 Khía Cạnh Cuộc Đời',
+                  subtitle: 'Bánh Xe Hạnh Phúc Toàn Diện',
+                  desc: 'Trực quan hóa điểm số thực tế trên biểu đồ Radar: Sức khỏe, Gia đình, Tài chính, Sự nghiệp, Mối quan hệ, Phát triển bản thân, Tinh thần nội tâm và Đóng góp xã hội. Nhìn rõ ngay điểm tựa năng lượng mạnh nhất và điểm nghẽn cốt lõi đang kìm hãm bạn.',
+                  tag: 'Bánh xe hạnh phúc',
                 },
                 {
-                  id: 2,
-                  title: 'Bảng Tần Số Năng Lượng',
-                  desc: 'Nhận biết và nâng cao tần số rung động để đáng mỗi ngày',
-                  img: 'https://images.unsplash.com/photo-1508672019048-805c876b67e2?auto=format&fit=crop&w=600&q=80',
+                  number: '02',
+                  title: 'Giải Mã Bản Mệnh, Tử Vi & Tần Số Năng Lượng',
+                  subtitle: 'Theo Ngày Tháng Năm Sinh & Giờ Sinh',
+                  desc: 'Tính toán chính xác Can Chi năm sinh, Ngũ Hành Nạp Âm, Cung Phi Bát Trạch (Đông / Tây Tứ Mệnh) và Con số đường đời Thần số học. Giúp bạn thấu hiểu điểm mạnh thiên bẩm, bài học số mệnh và cách đón nhận cơ hội thuận theo tự nhiên.',
+                  tag: 'Tử vi & Thần số học',
                 },
                 {
-                  id: 3,
-                  title: '30 Ngày Thay Đổi Bản Thân',
-                  desc: 'Kế hoạch hành động chi tiết, dễ áp dụng',
-                  img: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=600&q=80',
+                  number: '03',
+                  title: 'Phương Pháp Dung Hòa & Gắn Kết Gia Đình',
+                  subtitle: 'Thấu Hiểu Tương Quan Năng Lượng',
+                  desc: 'Nhận diện sự tương thích năng lượng giữa bạn và những người thân yêu (vợ/chồng, con cái, cha mẹ). Cung cấp giải pháp giao tiếp, lắng nghe và chuyển hóa mâu thuẫn để kiến tạo tổ ấm hòa thuận, yêu thương.',
+                  tag: 'Gắn kết người thân',
                 },
                 {
-                  id: 4,
-                  title: 'Bí Quyết Gia Đình Hạnh Phúc',
-                  desc: 'Cải thiện mối quan hệ và hóa giải mâu thuẫn',
-                  img: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=600&q=80',
+                  number: '04',
+                  title: 'Giải Pháp Hóa Giải Rào Cản & Hành Động 90 Ngày',
+                  subtitle: 'Lộ Trình Cá Nhân Hóa Dành Riêng Cho Bạn',
+                  desc: 'Định vị lĩnh vực ưu tiên cải thiện cấp thiết nhất trong 90 ngày tới. Nhận diện các rào cản vô thức (thời gian, tài chính, thói quen cũ) và nhận bản báo cáo giải pháp chi tiết gửi trực tiếp về Zalo/Email/Messenger trong 24h.',
+                  tag: 'Kế hoạch chuyển hóa',
                 },
-                {
-                  id: 5,
-                  title: 'Thu Hút Tài Chính Và Cơ Hội',
-                  desc: 'Tư duy và cách thực hành để thu hút tài chính',
-                  img: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&w=600&q=80',
-                },
-              ].map((book) => (
+              ].map((item) => (
                 <div
-                  key={book.id}
-                  className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xs hover:shadow-xl transition-all flex flex-col justify-between group font-be-vietnam"
+                  key={item.number}
+                  className="rounded-3xl border border-gray-200/80 bg-white p-6 sm:p-8 shadow-xs hover:shadow-xl transition-all flex flex-col justify-between group font-be-vietnam relative overflow-hidden"
                 >
-                  <div>
-                    <div className="relative aspect-4/3 overflow-hidden">
-                      <img
-                        src={book.img}
-                        alt={book.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-[#FFF0E6] text-[#FA5B13] border border-[#FFD8C2]">
+                        {item.tag}
+                      </span>
+                      <span className={`text-2xl font-bold text-gray-300 group-hover:text-[#FA5B13] transition-colors ${headingClass}`}>
+                        {item.number}
+                      </span>
                     </div>
 
-                    <div className="p-5 space-y-2">
+                    <div>
                       <h3 className={`font-bold text-gray-900 text-xl sm:text-2xl leading-snug ${headingClass}`}>
-                        {book.title}
+                        {item.title}
                       </h3>
-                      <p className="text-sm text-gray-600 leading-relaxed font-be-vietnam">{book.desc}</p>
+                      <p className="text-xs font-semibold text-[#FA5B13] mt-1 uppercase tracking-wider">
+                        {item.subtitle}
+                      </p>
                     </div>
-                  </div>
 
-                  <div className="px-5 pb-5 pt-3 border-t border-gray-100 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-emerald-600">Quà tặng miễn phí</span>
-                    <button
-                      onClick={() => setIsRegisterOpen(true)}
-                      className="text-xs font-bold text-[#FA5B13] hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <span>Nhận ngay</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    <p className="text-sm sm:text-base text-gray-600 leading-relaxed font-be-vietnam">
+                      {item.desc}
+                    </p>
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* CTA Ngay Dưới Section 05 */}
+            <div className="pt-4 text-center">
+              <button
+                onClick={goToBando}
+                className="w-full sm:w-auto px-10 py-4.5 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold text-base sm:text-lg rounded-2xl shadow-xl hover:shadow-2xl inline-flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] active:scale-95 cursor-pointer font-be-vietnam"
+              >
+                <Compass className="w-5 h-5 text-white" />
+                <span>KHẢO SÁT BẢN ĐỒ NGAY &gt;</span>
+              </button>
+              <p className="text-xs text-gray-500 mt-2.5 font-medium">
+                * Hoàn toàn miễn phí · Nhận ngay kết quả phân tích sơ bộ & báo cáo chuyên sâu
+              </p>
             </div>
           </div>
         </section>
@@ -601,11 +622,11 @@ export const StraightforwardLandingPage: React.FC = () => {
 
             <div className="pt-2">
               <button
-                onClick={() => setIsRegisterOpen(true)}
+                onClick={goToBando}
                 className="px-10 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold text-base rounded-2xl shadow-2xl inline-flex items-center gap-2.5 transition-transform active:scale-95 cursor-pointer font-be-vietnam"
               >
-                <Gift className="w-5 h-5" />
-                <span>NHẬN QUÀ TẶNG MIỄN PHÍ &gt;</span>
+                <Compass className="w-5 h-5" />
+                <span>KHẢO SÁT BẢN ĐỒ NGAY &gt;</span>
               </button>
             </div>
           </div>
@@ -623,8 +644,8 @@ export const StraightforwardLandingPage: React.FC = () => {
               <button onClick={() => scrollTo('sec-01')} className="hover:text-black cursor-pointer">
                 Lên đầu trang
               </button>
-              <button onClick={() => setIsRegisterOpen(true)} className="hover:text-black cursor-pointer">
-                Liên hệ & Nhận quà
+              <button onClick={goToBando} className="hover:text-black cursor-pointer">
+                Khảo sát Bản Đồ ngay
               </button>
               <button onClick={() => setIsFigmaModalOpen(true)} className="hover:text-[#FA5B13] font-semibold cursor-pointer">
                 Figma Kit

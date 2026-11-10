@@ -33,12 +33,6 @@ export const AffiliateHomePage: React.FC = () => {
   const minutes = String(Math.floor(timeLeft / 60)).padStart(2, '0');
   const seconds = String(timeLeft % 60).padStart(2, '0');
 
-  const steps = [
-    'Bấm nút cam bên dưới để vào nhóm Zalo kín.',
-    'Chờ ban tổ chức duyệt giữ chỗ trong vòng 3 phút.',
-    'Đọc tin nhắn ghim để nhận lịch học, link phòng học và bộ quà tặng.',
-  ];
-
   return (
     <div className="min-h-screen bg-white text-[#191A23] font-be-vietnam antialiased flex flex-col">
       <header className="border-b border-gray-200">
@@ -65,9 +59,12 @@ export const AffiliateHomePage: React.FC = () => {
             <h1 className="type-display text-3xl sm:text-4xl text-gray-950 [text-wrap:balance]">
               Chúc mừng bạn đã giữ chỗ thành công!
             </h1>
-            <p className="text-base text-gray-600 leading-relaxed">
-              Lịch học, link phòng học trực tiếp và trọn bộ quà tặng trị giá 125.970.000đ chỉ được gửi trong{' '}
-              <strong className="text-gray-900">nhóm Zalo kín</strong> của thử thách.
+            <p className="text-base sm:text-lg text-gray-600 leading-relaxed">
+              Lịch học, link phòng học trực tiếp và trọn bộ quà tặng trị giá{' '}
+              <strong className="font-black text-xl sm:text-2xl text-[#FA5B13] bg-orange-50 border border-orange-200 rounded-lg px-2.5 py-0.5 inline-block align-middle mx-1 shadow-xs">
+                125.970.000đ
+              </strong>{' '}
+              chỉ được gửi trong <strong className="text-gray-900 font-bold">nhóm Zalo kín</strong> của thử thách.
             </p>
           </div>
 
@@ -83,41 +80,35 @@ export const AffiliateHomePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <a
-              href={ZALO_GROUP_LINK}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full px-6 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-semibold text-base sm:text-lg rounded-lg inline-flex items-center justify-center gap-2 transition-colors"
-            >
-              Bấm để vào nhóm Zalo kín
-              <ArrowRight className="w-5 h-5" />
-            </a>
-            <p className="text-xs text-gray-500">Vào nhóm ngay để ban tổ chức kiểm duyệt và gửi quà cho bạn</p>
-          </div>
-
-          <ol className="text-left border-t border-gray-200">
-            {steps.map((step, idx) => (
-              <li key={step} className="flex gap-4 py-4 border-b border-gray-200">
-                <span className="type-figure text-xl text-[#FA5B13] w-7 shrink-0">{idx + 1}.</span>
-                <span className="text-base text-gray-700 leading-relaxed">{step}</span>
-              </li>
-            ))}
-          </ol>
-
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-sm text-gray-600">Hoặc mở Zalo và quét mã QR:</p>
-            <div className="p-2.5 bg-white border border-gray-200/90 rounded-2xl shadow-sm inline-block">
+          {/* MÃ QR NHÓM ZALO ĐẶT TRÊN NÚT THAM GIA */}
+          <div className="flex flex-col items-center gap-3 pt-2">
+            <p className="text-sm font-medium text-gray-700">Mở ứng dụng Zalo và quét mã QR để vào nhóm:</p>
+            <div className="p-3 bg-white border border-gray-200/90 rounded-2xl shadow-md inline-block">
               <img
                 src={QR_URL}
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = QR_FALLBACK_URL;
                 }}
                 alt="Mã QR nhóm Zalo kín Thử thách 2 ngày Affiliate"
-                className="w-40 h-40 sm:w-44 sm:h-44 img-crisp block"
+                className="w-48 h-48 sm:w-52 sm:h-52 img-crisp block object-contain"
                 loading="lazy"
               />
             </div>
+            <p className="text-xs text-gray-500">Hoặc bấm nút bên dưới nếu bạn đang mở bằng điện thoại:</p>
+          </div>
+
+          {/* NÚT THAM GIA NHÓM ZALO */}
+          <div className="space-y-2">
+            <a
+              href={ZALO_GROUP_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full px-6 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-semibold text-base sm:text-lg rounded-xl inline-flex items-center justify-center gap-2 transition-colors shadow-lg shadow-[#FA5B13]/25 active:scale-98"
+            >
+              Tham gia nhóm Zalo ngay
+              <ArrowRight className="w-5 h-5" />
+            </a>
+            <p className="text-xs text-gray-500">Vào nhóm ngay để ban tổ chức kiểm duyệt và gửi quà cho bạn</p>
           </div>
         </div>
       </main>
