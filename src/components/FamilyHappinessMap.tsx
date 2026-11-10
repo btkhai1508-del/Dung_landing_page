@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { submitToSheet, SHEET_TABS } from '../lib/submitToSheet';
 import { BirthDateInput, isoToVN } from './BirthDateInput';
+import { computeNumerology } from '../lib/numerology';
+import { computeTuVi } from '../lib/tuviEngine';
 import {
   Sprout,
   ArrowRight,
@@ -173,16 +175,11 @@ const STEP_BACKGROUNDS: Record<number, { url: string; quote: string }> = {
 // Helper tính con số chủ đạo thần số học
 function calculateLifePath(birthDateStr: string): number {
   if (!isIsoDate(birthDateStr)) return 0;
-  const digits = birthDateStr.replace(/\D/g, '').split('').map(Number);
-  if (digits.length < 8) return 0;
-  let sum = digits.reduce((acc, d) => acc + d, 0);
-  while (sum > 11 && sum !== 22 && sum !== 33) {
-    sum = String(sum).split('').map(Number).reduce((acc, d) => acc + d, 0);
-  }
-  return sum;
+  const [y, m, d] = birthDateStr.split('-').map(Number);
+  return computeNumerology('', d, m, y).lifePath;
 }
 
-// Helper tính thông tin cơ bản Lá số Tử Vi & Ngũ hành từ ngày sinh
+// Thông tin cơ bản Tử vi & Ngũ hành lấy từ bộ tính chuẩn (lịch âm, nạp âm 60 hoa giáp, Bát trạch)
 interface TuViInfo {
   canChiNam: string;
   nguHanh: string;
@@ -190,11 +187,6 @@ interface TuViInfo {
   conSoChuDao: number;
   amDuong: string;
   namSinh: number;
-  cungMenhViTri: string;
-  cungThanViTri: string;
-  tinhChatMenh: string;
-  taiBach: string;
-  phuThe: string;
 }
 
 function calculateTuVi(birthDateStr: string, gender: string = 'Nam'): TuViInfo {
@@ -206,61 +198,17 @@ function calculateTuVi(birthDateStr: string, gender: string = 'Nam'): TuViInfo {
       conSoChuDao: 9,
       amDuong: 'Dương Nam',
       namSinh: 2024,
-      cungMenhViTri: 'Cung Thìn',
-      cungThanViTri: 'Thân cư Mệnh',
-      tinhChatMenh: 'Nội lực kiên định, giàu lòng vị tha và tinh thần trách nhiệm',
-      taiBach: 'Tích lũy tài chính bền vững, hanh thông khi làm việc bằng tâm',
-      phuThe: 'Đồng điệu tư duy, cùng vun đắp nền tảng gia đình hạnh phúc',
     };
   }
-
-  const parts = birthDateStr.split('-');
-  const year = parseInt(parts[0], 10) || 1990;
-  const month = parseInt(parts[1], 10) || 1;
-
-  const CANS = ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý'];
-  const CHIS = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi'];
-
-  const canIndex = ((year - 4) % 10 + 10) % 10;
-  const chiIndex = ((year - 4) % 12 + 12) % 12;
-
-  const can = CANS[canIndex];
-  const chi = CHIS[chiIndex];
-  const canChiNam = `${can} ${chi}`;
-
-  const canVal = Math.floor(canIndex / 2) + 1;
-  const chiVal = [0, 0, 1, 1, 2, 2, 0, 0, 1, 1, 2, 2][chiIndex];
-
-  let menhVal = canVal + chiVal;
-  if (menhVal > 5) menhVal -= 5;
-  const MENH = ['', 'Kim (Hải Trung Kim)', 'Thủy (Giản Hạ Thủy)', 'Hỏa (Lư Trung Hỏa)', 'Thổ (Lộ Bàng Thổ)', 'Mộc (Đại Lâm Mộc)'];
-  const nguHanh = MENH[menhVal] || 'Thổ (Lộ Bàng Thổ)';
-
-  const isDuong = canIndex % 2 === 0;
-  const amDuong = `${isDuong ? 'Dương' : 'Âm'} ${gender === 'Nữ' ? 'Nữ' : 'Nam'}`;
-
-  const sumDigits = String(year).split('').reduce((s, d) => s + parseInt(d, 10), 0);
-  const remainder = sumDigits % 9 || 9;
-  const cungNam = ['', 'Khảm (Thủy) - Đông Tứ Mệnh', 'Ly (Hỏa) - Đông Tứ Mệnh', 'Cấn (Thổ) - Tây Tứ Mệnh', 'Đoài (Kim) - Tây Tứ Mệnh', 'Càn (Kim) - Tây Tứ Mệnh', 'Khôn (Thổ) - Tây Tứ Mệnh', 'Tốn (Mộc) - Đông Tứ Mệnh', 'Chấn (Mộc) - Đông Tứ Mệnh', 'Khôn (Thổ) - Tây Tứ Mệnh'];
-  const cungNu = ['', 'Cấn (Thổ) - Tây Tứ Mệnh', 'Càn (Kim) - Tây Tứ Mệnh', 'Đoài (Kim) - Tây Tứ Mệnh', 'Cấn (Thổ) - Tây Tứ Mệnh', 'Ly (Hỏa) - Đông Tứ Mệnh', 'Khảm (Thủy) - Đông Tứ Mệnh', 'Khôn (Thổ) - Tây Tứ Mệnh', 'Chấn (Mộc) - Đông Tứ Mệnh', 'Tốn (Mộc) - Đông Tứ Mệnh'];
-  const cungMenh = gender === 'Nữ' ? (cungNu[remainder] || 'Đoài (Kim) - Tây Tứ Mệnh') : (cungNam[remainder] || 'Khảm (Thủy) - Đông Tứ Mệnh');
-
-  const CUNG_NAMES = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi'];
-  const menhPos = ((2 + month - 1) % 12 + 12) % 12;
-  const thanPos = ((2 + month + 2) % 12 + 12) % 12;
-
+  const [y, m, d] = birthDateStr.split('-').map(Number);
+  const tv = computeTuVi(d, m, y, gender);
   return {
-    canChiNam,
-    nguHanh,
-    cungMenh,
+    canChiNam: tv.canChi,
+    nguHanh: `${tv.napAm.hanh} (${tv.napAm.name})`,
+    cungMenh: `${tv.batTrach.name} (${tv.batTrach.hanh}) - ${tv.batTrach.group}`,
     conSoChuDao: calculateLifePath(birthDateStr),
-    amDuong,
-    namSinh: year,
-    cungMenhViTri: `Cung ${CUNG_NAMES[menhPos]}`,
-    cungThanViTri: `Thân cư ${CUNG_NAMES[thanPos]}`,
-    tinhChatMenh: 'Nội lực kiên định, giàu lòng vị tha và tinh thần trách nhiệm',
-    taiBach: 'Tích lũy tài chính bền vững, hanh thông khi làm việc bằng tâm',
-    phuThe: 'Đồng điệu tư duy, cùng vun đắp nền tảng gia đình hạnh phúc',
+    amDuong: tv.amDuongLabel,
+    namSinh: y,
   };
 }
 
@@ -438,6 +386,20 @@ export const FamilyHappinessMap: React.FC = () => {
           'Hình thức hỗ trợ': formData.supportMethods.join(', '),
           'Kênh nhận bản đồ': 'Zalo / Email / Messenger',
           'Đồng ý điều khoản': formData.consent ? 'Đồng ý' : 'Chưa',
+          // Dữ liệu có cấu trúc để trang /ketqua dựng báo cáo (không phụ thuộc vào cách ghép chuỗi)
+          'Dữ liệu báo cáo': JSON.stringify({
+            relatives:
+              formData.includeRelatives && formData.relatives.length > 0
+                ? formData.relatives.map((r) => ({
+                    name: r.name || '',
+                    relationship: r.relationship || '',
+                    birthDate: r.birthDate ? isoToVN(r.birthDate) : '',
+                    gender: r.gender || '',
+                  }))
+                : [],
+            obstacles: allObstacles,
+            support: formData.supportMethods,
+          }),
         },
       });
     } catch (err) {

@@ -1,26 +1,45 @@
 /**
  * ==============================================================================
- * GOOGLE APPS SCRIPT - DŨNG GIEO HẠT WEBHOOK & EMAIL TỰ ĐỘNG
- * Chủ đề: Thay Đổi Tương Lai, Không Chỉ Là Số Phận
+ * GOOGLE APPS SCRIPT - DŨNG GIEO HẠT: LƯU DỮ LIỆU, EMAIL SAU 30 PHÚT, TRA CỨU KẾT QUẢ
+ * ------------------------------------------------------------------------------
+ * 1) Web ghi dữ liệu vào đúng tab (Quà Tặng Tầng 1 / Affiliate / tab đầu tiên).
+ * 2) Tab "Quà Tặng Tầng 1": cột A là Mã DDMMXXX (XXX = STT trong ngày, 001–999).
+ * 3) Sau khi người dùng hoàn thành khảo sát /bando, hệ thống gửi 1 email kèm mã
+ *    tra cứu SAU 30 PHÚT (hàng đợi + trigger mỗi 5 phút).
+ * 4) Trang /ketqua gọi doGet?action=result&phone=...&code=... để lấy dữ liệu người dùng.
+ *
+ * SAU KHI DÁN CODE NÀY:
+ *   a. Chạy hàm setupTriggers() MỘT LẦN trong trình soạn thảo (cấp quyền khi được hỏi).
+ *   b. Deploy → Manage deployments → Edit → New version → Deploy.
+ *   c. Điền RESULT_PAGE_URL bên dưới (địa chỉ trang kết quả, ví dụ https://tenmien.com/ketqua).
  * ==============================================================================
  */
 
-// 1. CẤU HÌNH LIÊN KẾT GOOGLE SHEET & ZALO
+// 1. CẤU HÌNH
 const SPREADSHEET_ID = "12Yb-Fu56Lnuc7lA7g23Atf8cWpThiJObud5HQjZzZEg"; // Sheet Dũng Gieo Hạt
-const ZALO_LINK = "https://zalo.me/g/a2y2x036pqkwzig7u9ri";
 const BRAND_NAME = "Dũng Gieo Hạt";
-const PROGRAM_NAME = "Thay Đổi Tương Lai - Không Chỉ Là Số Phận";
+const RESULT_PAGE_URL = "";          // ví dụ: "https://tenmien.com/ketqua" — để trống thì email chỉ hướng dẫn bằng chữ
+const MAIL_DELAY_MINUTES = 30;       // gửi email sau khi hoàn thành khảo sát
+const MAIL_PREFIX = "mail_";
+const EMAIL_SENT_HEADER = "Email đã gửi lúc";
+const TZ = "Asia/Ho_Chi_Minh";
 
-// Tự động tạo ảnh mã QR Zalo chất lượng cao để nhúng vào email
-const ZALO_QR_URL = "https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=" + encodeURIComponent(ZALO_LINK);
-
-function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "ready",
-    message: "Webhook Dũng Gieo Hạt đang hoạt động bình thường!"
-  })).setMimeType(ContentService.MimeType.JSON);
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// ----------------------------------------------------------------------------
+// GET: kiểm tra hoạt động / tra cứu kết quả
+// ----------------------------------------------------------------------------
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.action === "result") return jsonOut(lookupResult(p.phone, p.code));
+  return jsonOut({ status: "ready", message: "Webhook Dũng Gieo Hạt đang hoạt động bình thường!" });
+}
+
+// ----------------------------------------------------------------------------
+// POST: nhận dữ liệu từ các form của website
+// ----------------------------------------------------------------------------
 function doPost(e) {
   try {
     const params = (e && e.parameter) || {};
@@ -35,21 +54,22 @@ function doPost(e) {
     const customerEmail = get("email");
     const formType = get("formType") || get("form");
     const sheetName = resolveSheetName(formType, get("sheet"));
+    const isBando = normalizeName(sheetName) === normalizeName(BANDO_SHEET);
 
     // Các cột cần ghi (tiêu đề → giá trị), theo đúng thứ tự frontend gửi lên
     let fields = {};
     try { fields = JSON.parse(get("fields") || "{}"); } catch (err) {}
     if (Object.keys(fields).length === 0) {
       // Frontend bản cũ không gửi `fields` → tự dựng lại từ các tham số rời
-      fields = normalizeName(sheetName) === normalizeName(BANDO_SHEET)
+      fields = isBando
         ? buildBandoFieldsFromLegacy(get)
         : { "Họ Và Tên": customerName, "SĐT": customerPhone, "Email": customerEmail };
     }
 
-    const timestamp = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+    const timestamp = new Date().toLocaleString("vi-VN", { timeZone: TZ });
     let duplicate = false;
+    let code = "";
 
-    // 1. Lưu vào đúng tab Google Sheet
     const lock = LockService.getScriptLock();
     try {
       lock.waitLock(20000);
@@ -66,12 +86,17 @@ function doPost(e) {
         const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
         const sheet = getTargetSheet(ss, sheetName);
         let row = Object.assign({ "Thời Gian": timestamp }, fields);
-        if (normalizeName(sheet.getName()) === normalizeName(BANDO_SHEET)) {
-          // Tab "Quà Tặng Tầng 1": cột A là Mã DDMMXXX (XXX = STT trong ngày, 001–999)
+        if (isBando) {
           ensureFirstColumn(sheet, CODE_HEADER);
-          row = Object.assign({ [CODE_HEADER]: nextDailyCode(sheet.getName()) }, row);
+          code = nextDailyCode(sheet.getName());
+          row = Object.assign({ [CODE_HEADER]: code }, row);
         }
         writeRowByHeaders(sheet, row);
+
+        // Hẹn gửi email kèm mã sau MAIL_DELAY_MINUTES phút (chỉ với khảo sát có mã)
+        if (isBando && code && customerEmail && customerEmail.indexOf("@") !== -1) {
+          scheduleResultEmail(code, customerName, customerEmail, customerPhone);
+        }
       }
     } catch (sheetError) {
       Logger.log("Lỗi ghi Google Sheet: " + sheetError.toString());
@@ -79,24 +104,16 @@ function doPost(e) {
       lock.releaseLock();
     }
 
-    // 2. Gửi email xác nhận kèm nút Zalo, mã QR Code và châm ngôn Dancing Script
-    if (!duplicate && customerEmail && customerEmail.indexOf("@") !== -1) {
-      sendWelcomeEmail(customerName || "Bạn", customerEmail);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
+    return jsonOut({
       status: "success",
       sheet: sheetName || "(tab đầu tiên)",
       duplicate: duplicate,
+      code: code,
       form: formType,
-      saved: { name: customerName, phone: customerPhone, email: customerEmail }
-    })).setMimeType(ContentService.MimeType.JSON);
-
+      saved: { name: customerName, phone: customerPhone, email: customerEmail },
+    });
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    return jsonOut({ status: "error", message: error.toString() });
   }
 }
 
@@ -250,203 +267,296 @@ function writeRowByHeaders(sheet, data) {
   range.setValues([values]);
 }
 
-/**
- * Gửi email chào mừng chuẩn nhận diện Dũng Gieo Hạt
- * - Đã fix 100% lỗi font/ký tự dấu hỏi chấm hình thoi (diamond question mark)
- * - Tích hợp châm ngôn Dancing Script tuyệt đẹp như trên website
- * - Nút bấm và mã QR Code nhóm Zalo
- */
-function sendWelcomeEmail(name, toEmail) {
-  const subject = "[Dũng Gieo Hạt] Xác Nhận Đăng Ký - Thay Đổi Tương Lai, Không Chỉ Là Số Phận";
+// ----------------------------------------------------------------------------
+// TRA CỨU KẾT QUẢ CHO TRANG /ketqua
+// ----------------------------------------------------------------------------
+function normalizePhone(v) {
+  let d = String(v === null || v === undefined ? "" : v).replace(/\D/g, "");
+  if (d.indexOf("84") === 0 && d.length >= 11) d = "0" + d.slice(2);
+  if (d.length === 9) d = "0" + d;
+  return d;
+}
+function normalizeCode(v) {
+  const d = String(v === null || v === undefined ? "" : v).replace(/\D/g, "");
+  return d ? d.padStart(7, "0") : "";
+}
+function cellText(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, "dd/MM/yyyy");
+  return String(v === null || v === undefined ? "" : v).trim();
+}
 
-  const htmlBody = `
-  <!DOCTYPE html>
-  <html lang="vi">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dũng Gieo Hạt</title>
-    <!-- Import Google Font Dancing Script cho email -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap');
-    </style>
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #F8F9FA; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #191A23; -webkit-font-smoothing: antialiased;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F8F9FA; padding: 30px 10px;">
-      <tr>
-        <td align="center">
-          
-          <!-- THẺ CONTAINER CHÍNH -->
-          <table role="presentation" width="100%" style="max-width: 600px; background-color: #FFFFFF; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.07); border: 1px solid #ECEFF2;">
-            
-            <!-- HEADER BRAND: TÔNG NỀN TỐI SANG TRỌNG & CAM ẤM -->
-            <tr>
-              <td style="background-color: #141820; padding: 24px 30px; border-bottom: 3px solid #FA5B13;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                  <tr>
-                    <td align="left" valign="middle">
-                      <table role="presentation" cellspacing="0" cellpadding="0">
-                        <tr>
-                          <!-- Logo Box: Dùng mã HTML entity mầm cây chuẩn, không bị Gmail xóa như SVG -->
-                          <td style="background-color: #FFF0E6; width: 42px; height: 42px; border-radius: 12px; text-align: center; vertical-align: middle; border: 1.5px solid #FFD8C2;">
-                            <span style="font-size: 22px; line-height: 1; display: inline-block;">&#127793;</span>
-                          </td>
-                          <td style="padding-left: 12px;">
-                            <span style="font-size: 20px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.3px; display: block;">Dũng Gieo Hạt</span>
-                            <span style="font-size: 11px; color: #FFA877; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px;">Gieo Hạt Thiện Lành · Kiến Tạo Tương Lai</span>
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                    <td align="right" valign="middle">
-                      <span style="font-size: 11px; font-weight: 700; background-color: #FA5B13; color: #FFFFFF; padding: 7px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;">
-                        ĐÃ XÁC NHẬN
-                      </span>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
+function lookupResult(phoneRaw, codeRaw) {
+  const phone = normalizePhone(phoneRaw);
+  const code = normalizeCode(codeRaw);
+  if (phone.length < 9 || code.length < 7) return { ok: false, error: "invalid" };
 
-            <!-- NỘI DUNG CHÍNH -->
-            <tr>
-              <td style="padding: 34px 30px 24px 30px;">
-                
-                <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #FA5B13; text-transform: uppercase; letter-spacing: 1px;">
-                  CHÚC MỪNG BẠN ĐÃ ĐĂNG KÝ THÀNH CÔNG!
-                </p>
-                
-                <h1 style="font-size: 26px; font-weight: 800; line-height: 34px; color: #141820; margin: 0 0 18px 0; letter-spacing: -0.5px;">
-                  Xin chào <span style="color: #FA5B13;">` + name + `</span>,
-                </h1>
+  // Giới hạn số lần thử sai: tối đa 8 lần / số điện thoại / giờ
+  const cache = CacheService.getScriptCache();
+  const tryKey = "try_" + phone;
+  const tries = Number(cache.get(tryKey) || "0");
+  if (tries >= 8) return { ok: false, error: "locked" };
 
-                <!-- HỘP TRÍCH DẪN ĐỒNG BỘ 100% TIẾNG VIỆT KHÔNG LỖI DẤU TRÊN GMAIL -->
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 20px 0 26px 0;">
-                  <tr>
-                    <td style="background-color: #141820; border-radius: 18px; padding: 22px 24px; text-align: center; border-left: 5px solid #FA5B13; box-shadow: 0 6px 16px rgba(0,0,0,0.15);">
-                      <p style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-style: italic; font-size: 20px; font-weight: 500; color: #FFA877; margin: 0 0 6px 0; line-height: 30px; letter-spacing: 0.2px;">
-                        &ldquo;Tương lai không được dự đoán,<br>tương lai được tạo ra bởi những gì bạn làm hôm nay.&rdquo;
-                      </p>
-                      <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">
-                        &mdash; DŨNG GIEO HẠT &mdash;
-                      </span>
-                    </td>
-                  </tr>
-                </table>
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const wanted = normalizeName(BANDO_SHEET);
+  const sheet = ss.getSheets().find((s) => normalizeName(s.getName()) === wanted);
+  if (!sheet || sheet.getLastRow() < 2) return failLookup(cache, tryKey, tries);
 
-                <p style="font-size: 15px; line-height: 25px; color: #374151; margin: 0 0 16px 0;">
-                  Thông tin giữ chỗ của bạn cho chương trình <strong>"Thay Đổi Tương Lai - Không Chỉ Là Số Phận"</strong> đã được ghi nhận thành công trên hệ thống.
-                </p>
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map((h) => normalizeName(h));
+  const col = (name) => headers.indexOf(normalizeName(name));
+  const cCode = col(CODE_HEADER);
+  const cPhone = col("SĐT");
+  if (cCode < 0 || cPhone < 0) return failLookup(cache, tryKey, tries);
 
-                <p style="font-size: 15px; line-height: 25px; color: #374151; margin: 0 0 24px 0;">
-                  Để thấu hiểu bản chất năng lượng, tần số rung động và vận dụng 6 quy luật vũ trụ nhằm làm chủ vận mệnh, <strong>toàn bộ tài liệu mật, trọn bộ Ebook đổi đời, lịch học và link Zoom sẽ được gửi độc quyền trong Nhóm Kín Zalo</strong>.
-                </p>
+  let rowIdx = -1;
+  for (let r = values.length - 1; r >= 1; r--) {
+    if (normalizeCode(values[r][cCode]) === code && normalizePhone(values[r][cPhone]) === phone) { rowIdx = r; break; }
+  }
+  if (rowIdx < 0) return failLookup(cache, tryKey, tries);
 
-                <!-- KHUNG HƯỚNG DẪN 3 BƯỚC -->
-                <div style="background-color: #FFF8F5; border: 1.5px solid #FFE4D6; border-radius: 18px; padding: 22px 24px; margin-bottom: 26px;">
-                  <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 14px;">
-                    <tr>
-                      <td style="background-color: #FA5B13; color: #FFFFFF; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
-                        HƯỚNG DẪN 3 BƯỚC
-                      </td>
-                      <td style="padding-left: 10px; font-size: 14px; font-weight: 700; text-transform: uppercase; color: #C2410C; letter-spacing: 0.5px;">
-                        ĐỂ NHẬN ĐẦY ĐỦ QUÀ TẶNG:
-                      </td>
-                    </tr>
-                  </table>
+  const row = values[rowIdx];
+  const val = (name) => { const i = col(name); return i < 0 ? "" : cellText(row[i]); };
+  let extra = {};
+  try { extra = JSON.parse(val("Dữ liệu báo cáo") || "{}"); } catch (err) {}
 
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                    <tr>
-                      <td style="padding-bottom: 12px; font-size: 14px; line-height: 22px; color: #431407;">
-                        <strong>1. Bấm nút màu cam</strong> bên dưới (hoặc quét mã QR) để vào Nhóm Zalo Kín.
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="padding-bottom: 12px; font-size: 14px; line-height: 22px; color: #431407;">
-                        <strong>2. Bấm "Tham gia nhóm"</strong> để ban tổ chức duyệt giữ chỗ cho bạn.
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="font-size: 14px; line-height: 22px; color: #431407;">
-                        <strong>3. Đọc tin nhắn Ghim</strong> tại nhóm để tải trọn bộ Ebook & nhận thông báo lịch buổi chia sẻ.
-                      </td>
-                    </tr>
-                  </table>
-                </div>
+  const scoreOf = (name) => { const m = /(\d+)/.exec(val(name)); return m ? Number(m[1]) : null; };
+  cache.remove(tryKey);
+  return {
+    ok: true,
+    record: {
+      code: code,
+      name: val("Họ Và Tên"),
+      birthDate: val("Ngày sinh"),
+      birthTime: val("Giờ sinh"),
+      gender: val("Giới tính"),
+      city: val("Tỉnh thành"),
+      occupation: val("Nghề nghiệp"),
+      familyTime: val("Thời gian cho gia đình"),
+      scores: {
+        health: scoreOf("Sức Khỏe"), family: scoreOf("Gia Đình"), finance: scoreOf("Tài Chính"),
+        career: scoreOf("Sự Nghiệp"), relationships: scoreOf("Mối Quan Hệ"),
+        selfDevelopment: scoreOf("Phát Triển Bản Thân"), spirituality: scoreOf("Tinh Thần & Nội Tâm"),
+        community: scoreOf("Đóng Góp Xã Hội"),
+      },
+      priority: val("Lĩnh vực ưu tiên"),
+      desire: val("Mong muốn thay đổi"),
+      obstacles: extra.obstacles || splitList(val("Rào cản lớn nhất")),
+      support: extra.support || splitList(val("Hình thức hỗ trợ")),
+      relatives: extra.relatives || [],
+      relativesText: val("Thông tin người thân"),
+    },
+  };
+}
+function splitList(s) { return String(s || "").split(/,\s*/).map((x) => x.trim()).filter(Boolean); }
+function failLookup(cache, tryKey, tries) {
+  cache.put(tryKey, String(tries + 1), 3600);
+  return { ok: false, error: "notfound" };
+}
 
-                <!-- NÚT BẤM VÀO NHÓM ZALO TRÊN ĐIỆN THOẠI (KHÔNG CÓ KÝ TỰ LỖI) -->
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
-                  <tr>
-                    <td align="center">
-                      <a href="` + ZALO_LINK + `" target="_blank" style="display: block; width: 90%; max-width: 440px; background-color: #FA5B13; color: #FFFFFF; font-size: 16px; font-weight: 800; text-decoration: none; padding: 18px 24px; border-radius: 16px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; box-shadow: 0 6px 20px rgba(250,91,19,0.35);">
-                        BẤM VÀO ĐÂY ĐỂ VÀO NHÓM ZALO &rarr;
-                      </a>
-                    </td>
-                  </tr>
-                </table>
+// ----------------------------------------------------------------------------
+// HÀNG ĐỢI EMAIL (gửi sau MAIL_DELAY_MINUTES phút)
+// ----------------------------------------------------------------------------
+function scheduleResultEmail(code, name, email, phone) {
+  const due = Date.now() + MAIL_DELAY_MINUTES * 60 * 1000;
+  PropertiesService.getScriptProperties().setProperty(
+    MAIL_PREFIX + code,
+    JSON.stringify({ code: code, name: name, to: email, phone: phone, due: due, tries: 0 })
+  );
+  try { ensureMailTrigger(); } catch (err) { Logger.log("Chưa tạo được trigger — hãy chạy setupTriggers(): " + err); }
+}
 
-                <!-- PHẦN MÃ QR CODE CHO NGƯỜI MỞ BẰNG MÁY TÍNH -->
-                <div style="background-color: #FAFAFA; border: 1px dashed #CBD5E1; border-radius: 20px; padding: 24px 20px; text-align: center; margin: 26px 0;">
-                  <p style="font-size: 14px; font-weight: 700; color: #1E293B; margin: 0 0 6px 0; text-transform: uppercase;">
-                    HOẶC QUÉT MÃ QR DƯỚI ĐÂY BẰNG ZALO:
-                  </p>
-                  <p style="font-size: 13px; color: #64748B; margin: 0 0 16px 0;">
-                    (Dành cho bạn đang mở email trên Máy tính / Laptop)
-                  </p>
-                  
-                  <!-- HÌNH ẢNH MÃ QR -->
-                  <div style="display: inline-block; padding: 12px; background-color: #FFFFFF; border-radius: 16px; border: 2px solid #141820; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-                    <img src="` + ZALO_QR_URL + `" width="190" height="190" alt="Mã QR Nhóm Zalo Dũng Gieo Hạt" style="display: block; border-radius: 8px;" />
-                  </div>
+function ensureMailTrigger() {
+  const exists = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === "processMailQueue");
+  if (!exists) ScriptApp.newTrigger("processMailQueue").timeBased().everyMinutes(5).create();
+}
 
-                  <p style="font-size: 12px; color: #64748B; margin: 14px 0 0 0;">
-                    Link dự phòng nếu không quét được: <br>
-                    <a href="` + ZALO_LINK + `" style="color: #FA5B13; font-weight: 600; text-decoration: underline; word-break: break-all;">` + ZALO_LINK + `</a>
-                  </p>
-                </div>
+/** CHẠY MỘT LẦN thủ công sau khi dán code: tạo trigger kiểm tra hàng đợi mỗi 5 phút. */
+function setupTriggers() {
+  ensureMailTrigger();
+  Logger.log("Đã thiết lập trigger processMailQueue (mỗi 5 phút).");
+}
 
-                <!-- CẢNH BÁO GIỮ CHỖ -->
-                <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 12px 16px; border-radius: 0 10px 10px 0; margin-bottom: 24px;">
-                  <p style="margin: 0; font-size: 13px; line-height: 20px; color: #92400E; font-weight: 600;">
-                    Lưu ý quan trọng: Nhóm Zalo kín chỉ duyệt cho người có trong danh sách đăng ký. Hãy tham gia ngay để không bị bỏ lỡ tài liệu và vé giữ chỗ của bạn.
-                  </p>
-                </div>
+function processMailQueue() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return;
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const all = props.getProperties();
+    const now = Date.now();
+    Object.keys(all).filter((k) => k.indexOf(MAIL_PREFIX) === 0).forEach((k) => {
+      let job;
+      try { job = JSON.parse(all[k]); } catch (err) { props.deleteProperty(k); return; }
+      if (job.due > now) return;
+      try {
+        sendResultEmail(job);
+        props.deleteProperty(k);
+        markEmailSent(job.code);
+      } catch (err) {
+        job.tries = (job.tries || 0) + 1;
+        Logger.log("Gửi email lỗi (" + job.code + ", lần " + job.tries + "): " + err);
+        if (job.tries >= 5) props.deleteProperty(k);
+        else props.setProperty(k, JSON.stringify(job));
+      }
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
 
-                <div style="height: 1px; background-color: #E5E7EB; margin: 28px 0 20px 0;"></div>
+// Ghi thời điểm đã gửi email vào cột "Email đã gửi lúc" của đúng dòng
+function markEmailSent(code) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const wanted = normalizeName(BANDO_SHEET);
+    const sheet = ss.getSheets().find((s) => normalizeName(s.getName()) === wanted);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0].map((h) => normalizeName(h));
+    const cCode = headers.indexOf(normalizeName(CODE_HEADER));
+    if (cCode < 0) return;
+    let cSent = headers.indexOf(normalizeName(EMAIL_SENT_HEADER));
+    if (cSent < 0) {
+      cSent = headers.findIndex((h, i) => h === "" && !values.some((r, ri) => ri > 0 && !isBlank(r[i])));
+      if (cSent < 0) cSent = values[0].length;
+      sheet.getRange(1, cSent + 1).setValue(EMAIL_SENT_HEADER);
+    }
+    for (let r = values.length - 1; r >= 1; r--) {
+      if (normalizeCode(values[r][cCode]) === normalizeCode(code)) {
+        sheet.getRange(r + 1, cSent + 1).setValue("'" + new Date().toLocaleString("vi-VN", { timeZone: TZ }));
+        return;
+      }
+    }
+  } catch (err) {
+    Logger.log("Không ghi được trạng thái email: " + err);
+  }
+}
 
-                <!-- CHỮ KÝ -->
-                <p style="font-size: 14px; line-height: 22px; color: #4B5563; margin: 0;">
-                  Chúc bạn luôn an lạc, thấu hiểu quy luật và làm chủ cuộc đời!<br>
-                  <strong style="color: #141820; font-size: 15px;">Dũng Gieo Hạt & Ban Hỗ Trợ</strong>
-                </p>
+// ----------------------------------------------------------------------------
+// EMAIL: thiết kế mới — nền giấy ấm, thẻ mã tra cứu nổi bật, không còn Zalo/QR
+// ----------------------------------------------------------------------------
+function escapeHtml(s) {
+  return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function maskPhone(p) {
+  const d = normalizePhone(p);
+  return d.length >= 7 ? d.slice(0, 3) + "****" + d.slice(-3) : "số điện thoại bạn đã đăng ký";
+}
 
-              </td>
-            </tr>
+function sendResultEmail(job) {
+  const name = job.name || "bạn";
+  const code = job.code;
+  const phoneHint = maskPhone(job.phone);
+  const hasUrl = !!RESULT_PAGE_URL;
+  const subject = "Mã tra cứu Bản Đồ Hạnh Phúc của bạn: " + code;
 
-            <!-- FOOTER -->
-            <tr>
-              <td style="background-color: #F8F9FA; border-top: 1px solid #EEF2F6; padding: 18px 30px; text-align: center;">
-                <p style="margin: 0; font-size: 11px; line-height: 18px; color: #9CA3AF;">
-                  © 2026 Dũng Gieo Hạt. Mọi quyền được bảo lưu.<br>
-                  Email này được gửi tự động khi bạn đăng ký nhận tài liệu trên website.
-                </p>
-              </td>
-            </tr>
+  const INK = "#1F1A17", MUTE = "#6B625B", PAPER = "#F4EFE8", CARD = "#FFFDF9", ACCENT = "#E8590C", DARK = "#16130F", LINE = "#E9E1D6";
+  const SERIF = "Georgia, 'Times New Roman', serif";
+  const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-  </html>
-  `;
+  const step = (n, title, text) =>
+    '<tr><td width="44" valign="top" style="padding:0 0 18px 0;">' +
+      '<div style="width:34px;height:34px;line-height:34px;border-radius:17px;background:' + ACCENT + ';color:#fff;font:700 15px/34px ' + SANS + ';text-align:center;">' + n + '</div>' +
+    '</td><td valign="top" style="padding:3px 0 18px 0;">' +
+      '<div style="font:700 15px/22px ' + SANS + ';color:' + INK + ';">' + title + '</div>' +
+      '<div style="font:400 14px/22px ' + SANS + ';color:' + MUTE + ';">' + text + '</div>' +
+    '</td></tr>';
 
-  // Gửi email qua GmailApp
-  GmailApp.sendEmail(toEmail, subject, "Chúc mừng bạn đã đăng ký thành công! Hãy vào nhóm Zalo để nhận trọn bộ tài liệu: " + ZALO_LINK, {
-    htmlBody: htmlBody,
-    name: BRAND_NAME
-  });
+  const feature = (t, d) =>
+    '<tr><td width="18" valign="top" style="padding:7px 0 0 0;"><div style="width:7px;height:7px;border-radius:4px;background:' + ACCENT + ';"></div></td>' +
+    '<td style="padding:0 0 12px 0;"><span style="font:700 14px/22px ' + SANS + ';color:' + INK + ';">' + t + '</span>' +
+    '<span style="font:400 14px/22px ' + SANS + ';color:' + MUTE + ';"> — ' + d + '</span></td></tr>';
+
+  const button = hasUrl
+    ? '<table role="presentation" cellspacing="0" cellpadding="0" style="margin:6px 0 4px 0;"><tr><td style="border-radius:999px;background:' + ACCENT + ';">' +
+      '<a href="' + escapeHtml(RESULT_PAGE_URL + (RESULT_PAGE_URL.indexOf("?") >= 0 ? "&" : "?") + "code=" + code) + '" target="_blank" style="display:inline-block;padding:15px 30px;font:700 15px/20px ' + SANS + ';color:#ffffff;text-decoration:none;letter-spacing:.3px;">Xem kết quả của tôi &rarr;</a>' +
+      '</td></tr></table>'
+    : "";
+
+  const step1 = hasUrl
+    ? 'Bấm nút <strong>“Xem kết quả của tôi”</strong> bên dưới (hoặc mở trang kết quả của ' + BRAND_NAME + ').'
+    : 'Mở trang kết quả trên website ' + BRAND_NAME + ' (đường dẫn kết thúc bằng <strong>/ketqua</strong>).';
+
+  const html =
+'<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+'<title>' + escapeHtml(subject) + '</title></head>' +
+'<body style="margin:0;padding:0;background:' + PAPER + ';">' +
+'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + PAPER + ';"><tr><td align="center" style="padding:28px 12px;">' +
+'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:' + CARD + ';border-radius:20px;overflow:hidden;">' +
+
+// Đầu thư
+'<tr><td style="background:' + DARK + ';padding:26px 34px;">' +
+  '<div style="font:italic 700 26px/32px ' + SERIF + ';color:#FFF4E8;">' + BRAND_NAME + '</div>' +
+  '<div style="font:600 11px/18px ' + SANS + ';color:#F2A774;letter-spacing:2.2px;text-transform:uppercase;padding-top:4px;">Thay đổi tương lai &middot; Không chỉ là số phận</div>' +
+'</td></tr>' +
+
+// Lời chào
+'<tr><td style="padding:38px 34px 6px 34px;">' +
+  '<div style="font:600 11px/16px ' + SANS + ';color:' + ACCENT + ';letter-spacing:2.4px;text-transform:uppercase;">Bản đồ hạnh phúc gia đình</div>' +
+  '<h1 style="margin:12px 0 14px 0;font:400 30px/38px ' + SERIF + ';color:' + INK + ';">Cảm ơn ' + escapeHtml(name) + ', bản đồ của bạn đã được lập.</h1>' +
+  '<p style="margin:0;font:400 15px/26px ' + SANS + ';color:' + MUTE + ';">Bạn vừa dành thời gian nhìn lại chính mình và gia đình – đó đã là một bước thay đổi. ' +
+  'Báo cáo cá nhân hóa của bạn gồm thần số học, tử vi, bánh xe hạnh phúc và kế hoạch hành động riêng. Để mở báo cáo, bạn chỉ cần mã dưới đây.</p>' +
+'</td></tr>' +
+
+// Thẻ mã
+'<tr><td style="padding:26px 34px 8px 34px;">' +
+  '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + DARK + ';border-radius:16px;"><tr><td align="center" style="padding:28px 20px;">' +
+    '<div style="font:600 11px/16px ' + SANS + ';color:#F2A774;letter-spacing:2.6px;text-transform:uppercase;">Mã tra cứu của bạn</div>' +
+    '<div style="font:700 44px/56px \'Courier New\', Courier, monospace;color:#FFFFFF;letter-spacing:7px;padding:10px 0 6px 0;">' + escapeHtml(code) + '</div>' +
+    '<div style="font:400 12px/18px ' + SANS + ';color:#BFB5AB;">Gồm ngày – tháng – số thứ tự đăng ký. Dùng cùng số điện thoại ' + escapeHtml(phoneHint) + '</div>' +
+  '</td></tr></table>' +
+'</td></tr>' +
+
+// Cách xem
+'<tr><td style="padding:30px 34px 4px 34px;">' +
+  '<div style="font:700 17px/24px ' + SERIF + ';color:' + INK + ';padding-bottom:16px;">Cách xem kết quả</div>' +
+  '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">' +
+    step(1, 'Mở trang kết quả', step1) +
+    step(2, 'Nhập số điện thoại', 'Số điện thoại bạn đã dùng khi điền khảo sát.') +
+    step(3, 'Nhập mã tra cứu', 'Mã gồm 7 chữ số ở trên, rồi bấm xem để mở báo cáo của riêng bạn.') +
+  '</table>' + button +
+'</td></tr>' +
+
+// Nội dung báo cáo
+'<tr><td style="padding:22px 34px 6px 34px;">' +
+  '<div style="font:700 17px/24px ' + SERIF + ';color:' + INK + ';padding-bottom:14px;">Bên trong báo cáo của bạn</div>' +
+  '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">' +
+    feature('Thần số học', 'số chủ đạo, sứ mệnh, năm cá nhân và các giai đoạn đời') +
+    feature('Tử vi &amp; bản mệnh', 'tuổi, nạp âm, cung phi và lá số theo giờ sinh') +
+    feature('Bánh xe hạnh phúc', '8 lĩnh vực cuộc sống kèm gợi ý cho từng điểm số') +
+    feature('Gia đình', 'mức độ hòa hợp với từng người thân bạn đã khai') +
+    feature('Kế hoạch 30 ngày', 'những bước nhỏ, đúng với tính cách của bạn') +
+  '</table>' +
+'</td></tr>' +
+
+// Câu trích
+'<tr><td style="padding:14px 34px 8px 34px;">' +
+  '<div style="border-top:1px solid ' + LINE + ';padding-top:22px;font:italic 400 18px/28px ' + SERIF + ';color:' + INK + ';">“Tương lai không được dự đoán, tương lai được tạo ra bởi những gì bạn làm hôm nay.”</div>' +
+'</td></tr>' +
+
+// Lưu ý & chữ ký
+'<tr><td style="padding:18px 34px 34px 34px;">' +
+  '<p style="margin:0 0 18px 0;font:400 13px/22px ' + SANS + ';color:' + MUTE + ';">Hãy lưu lại email này. Mã chỉ mở được báo cáo khi đi cùng số điện thoại của bạn, vì vậy bạn có thể yên tâm về sự riêng tư.</p>' +
+  '<p style="margin:0;font:400 14px/22px ' + SANS + ';color:' + MUTE + ';">Chúc bạn một hành trình hiểu mình và thay đổi thật nhiều ý nghĩa,<br>' +
+  '<strong style="font:italic 700 17px/28px ' + SERIF + ';color:' + INK + ';">Dũng Gieo Hạt &amp; Ban Hỗ Trợ</strong></p>' +
+'</td></tr>' +
+
+// Chân thư
+'<tr><td style="background:' + PAPER + ';padding:18px 34px;text-align:center;">' +
+  '<p style="margin:0;font:400 11px/18px ' + SANS + ';color:#9A9087;">© 2026 ' + BRAND_NAME + '. Email này được gửi tự động sau khi bạn hoàn thành khảo sát trên website.</p>' +
+'</td></tr>' +
+
+'</table></td></tr></table></body></html>';
+
+  const plain =
+    "Cảm ơn " + name + ", bản đồ hạnh phúc của bạn đã được lập.\n\n" +
+    "MÃ TRA CỨU CỦA BẠN: " + code + "\n" +
+    "(dùng cùng số điện thoại " + phoneHint + ")\n\n" +
+    "Cách xem kết quả:\n" +
+    "1. Mở trang kết quả" + (hasUrl ? ": " + RESULT_PAGE_URL : " trên website (đường dẫn kết thúc bằng /ketqua)") + "\n" +
+    "2. Nhập số điện thoại bạn đã đăng ký\n" +
+    "3. Nhập mã tra cứu ở trên\n\n" +
+    "Hãy lưu lại email này.\n— " + BRAND_NAME;
+
+  GmailApp.sendEmail(job.to, subject, plain, { htmlBody: html, name: BRAND_NAME });
 }
