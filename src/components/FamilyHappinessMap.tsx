@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { submitToSheet, SHEET_TABS } from '../lib/submitToSheet';
+import { BirthDateInput, isoToVN } from './BirthDateInput';
 import {
   Sprout,
   ArrowRight,
@@ -58,10 +59,10 @@ interface FormData {
 // Năm sinh hợp lệ: từ 1900 đến hôm nay (chặn gõ nhầm như năm 3111)
 const MIN_BIRTH_DATE = '1900-01-01';
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const isIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
 function birthDateError(value: string): string | null {
   if (!value) return null;
-  const year = Number(value.slice(0, 4));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(year)) return 'Ngày sinh không hợp lệ';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'Vui lòng nhập đúng ngày/tháng/năm, ví dụ 15/08/1990';
   if (value < MIN_BIRTH_DATE) return 'Năm sinh phải từ 1900 trở về sau';
   if (value > todayISO()) return 'Ngày sinh không được ở tương lai, vui lòng kiểm tra lại năm sinh';
   return null;
@@ -171,7 +172,7 @@ const STEP_BACKGROUNDS: Record<number, { url: string; quote: string }> = {
 
 // Helper tính con số chủ đạo thần số học
 function calculateLifePath(birthDateStr: string): number {
-  if (!birthDateStr) return 0;
+  if (!isIsoDate(birthDateStr)) return 0;
   const digits = birthDateStr.replace(/\D/g, '').split('').map(Number);
   if (digits.length < 8) return 0;
   let sum = digits.reduce((acc, d) => acc + d, 0);
@@ -197,7 +198,7 @@ interface TuViInfo {
 }
 
 function calculateTuVi(birthDateStr: string, gender: string = 'Nam'): TuViInfo {
-  if (!birthDateStr) {
+  if (!isIsoDate(birthDateStr)) {
     return {
       canChiNam: 'Giáp Thìn',
       nguHanh: 'Hỏa (Phú Đăng Hỏa)',
@@ -385,7 +386,7 @@ export const FamilyHappinessMap: React.FC = () => {
           ? formData.relatives
               .map(
                 (r, i) =>
-                  `Người ${i + 1}: ${r.name || 'Chưa rõ'} (${r.relationship || 'Người thân'}, ${r.birthDate || 'Chưa rõ NS'}, ${r.gender || 'Chưa rõ GT'})`
+                  `Người ${i + 1}: ${r.name || 'Chưa rõ'} (${r.relationship || 'Người thân'}, ${r.birthDate ? isoToVN(r.birthDate) : 'Chưa rõ NS'}, ${r.gender || 'Chưa rõ GT'})`
               )
               .join('; ')
           : 'Không có';
@@ -408,7 +409,7 @@ export const FamilyHappinessMap: React.FC = () => {
           'Họ Và Tên': fullName,
           'SĐT': phone,
           'Email': email,
-          'Ngày sinh': formData.birthDate,
+          'Ngày sinh': isoToVN(formData.birthDate),
           'Giờ sinh': formData.birthTime || 'Không rõ',
           'Giới tính': formData.gender,
           'Tỉnh thành': formData.city.trim(),
@@ -651,7 +652,7 @@ export const FamilyHappinessMap: React.FC = () => {
                 {[
                   ['Họ và tên', formData.fullName],
                   ['Giới tính', formData.gender],
-                  ['Ngày sinh', formData.birthDate],
+                  ['Ngày sinh', isoToVN(formData.birthDate)],
                   ['Giờ sinh', formData.birthTime || 'Không rõ'],
                   ['Nơi sinh sống', formData.city || 'Chưa cập nhật'],
                   ['Nghề nghiệp', formData.occupation || 'Chưa cập nhật'],
@@ -1028,16 +1029,14 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Ngày sinh & Giờ sinh */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
                     <div className="space-y-2">
-                      <label className="block text-base sm:text-lg font-semibold text-white">
+                      <label htmlFor="birthDate" className="block text-base sm:text-lg font-semibold text-white">
                         2. Ngày tháng năm sinh (Dương lịch) <span className="text-[#FA5B13]">*</span>
                       </label>
-                      <input
-                        type="date"
+                      <BirthDateInput
+                        id="birthDate"
                         value={formData.birthDate}
-                        min={MIN_BIRTH_DATE}
-                        max={todayISO()}
-                        onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                        className="w-full py-3 sm:py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white transition-all bg-black/35 backdrop-blur-xs [color-scheme:dark]"
+                        onChange={(v) => setFormData((prev) => ({ ...prev, birthDate: v }))}
+                        className="w-full py-3 sm:py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white tabular-nums tracking-wide transition-all bg-black/35 backdrop-blur-xs placeholder:text-white/45"
                       />
                       {errors.birthDate && <p className="text-sm text-red-300 font-medium">{errors.birthDate}</p>}
                     </div>
@@ -1234,13 +1233,10 @@ export const FamilyHappinessMap: React.FC = () => {
                               placeholder="Quan hệ (Vợ/Chồng, Con, Cha/Mẹ...)"
                               className="py-2.5 px-3.5 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-sm sm:text-base text-white bg-black/35 placeholder:text-white/60"
                             />
-                            <input
-                              type="date"
+                            <BirthDateInput
                               value={rel.birthDate}
-                              min={MIN_BIRTH_DATE}
-                              max={todayISO()}
-                              onChange={(e) => updateRelative(idx, 'birthDate', e.target.value)}
-                              className="py-2.5 px-3.5 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-sm sm:text-base text-white bg-black/35 [color-scheme:dark]"
+                              onChange={(v) => updateRelative(idx, 'birthDate', v)}
+                              className="py-2.5 px-3.5 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-sm sm:text-base text-white tabular-nums bg-black/35 placeholder:text-white/45"
                             />
                             <div className="flex gap-2">
                               {['Nam', 'Nữ'].map((g) => (
