@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build && mkdir -p dist/bando && cp dist/index.html dist/bando/index.html && mkdir -p dist/affiliate && cp dist/index.html dist/affiliate/index.html && mkdir -p dist/home && cp dist/index.html dist/home/index.html",
+    "build": "vite build && mkdir -p dist/bando && cp dist/index.html dist/bando/index.html && mkdir -p dist/affiliate && cp dist/index.html dist/affiliate/index.html && mkdir -p dist/home && cp dist/index.html dist/home/index.html && mkdir -p dist/ketqua && cp dist/index.html dist/ketqua/index.html",
     "preview": "vite preview",
     "start": "vite preview --port 10000 --host 0.0.0.0",
     "clean": "rm -rf dist server.js",
