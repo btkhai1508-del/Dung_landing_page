@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { submitToSheet, SHEET_TABS } from '../lib/submitToSheet';
 import {
   Sprout,
   ArrowRight,
@@ -52,6 +53,18 @@ interface FormData {
   email: string;
   deliveryChannels: string[];
   consent: boolean;
+}
+
+// Năm sinh hợp lệ: từ 1900 đến hôm nay (chặn gõ nhầm như năm 3111)
+const MIN_BIRTH_DATE = '1900-01-01';
+const todayISO = () => new Date().toISOString().slice(0, 10);
+function birthDateError(value: string): string | null {
+  if (!value) return null;
+  const year = Number(value.slice(0, 4));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(year)) return 'Ngày sinh không hợp lệ';
+  if (value < MIN_BIRTH_DATE) return 'Năm sinh phải từ 1900 trở về sau';
+  if (value > todayISO()) return 'Ngày sinh không được ở tương lai, vui lòng kiểm tra lại năm sinh';
+  return null;
 }
 
 const INITIAL_DATA: FormData = {
@@ -274,6 +287,7 @@ export const FamilyHappinessMap: React.FC = () => {
     if (step === 2) {
       if (!formData.fullName.trim()) errs.fullName = 'Vui lòng nhập họ và tên đầy đủ';
       if (!formData.birthDate) errs.birthDate = 'Vui lòng chọn ngày tháng năm sinh';
+      else if (birthDateError(formData.birthDate)) errs.birthDate = birthDateError(formData.birthDate)!;
       if (!formData.gender) errs.gender = 'Vui lòng chọn giới tính';
       if (!formData.city.trim()) errs.city = 'Vui lòng nhập tỉnh/thành phố';
       if (!formData.occupation.trim()) errs.occupation = 'Vui lòng nhập công việc hiện tại';
@@ -288,6 +302,7 @@ export const FamilyHappinessMap: React.FC = () => {
           formData.relatives.forEach((rel, idx) => {
             if (!rel.relationship.trim()) errs[`rel_rel_${idx}`] = 'Vui lòng nhập mối quan hệ';
             if (!rel.birthDate) errs[`rel_dob_${idx}`] = 'Vui lòng chọn ngày sinh';
+            else if (birthDateError(rel.birthDate)) errs[`rel_dob_${idx}`] = birthDateError(rel.birthDate)!;
             if (!rel.gender) errs[`rel_gender_${idx}`] = 'Vui lòng chọn giới tính';
           });
         }
@@ -350,11 +365,6 @@ export const FamilyHappinessMap: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Lưu thông tin form bando vào Tabs sheet "Quà Tặng Tầng 1" theo đúng yêu cầu
-      const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVvzC75rDJbWAJ-J-xHxG34x0MAsrJvvFAfnNKh_0PVN7YfqK9y1ttFKYHoZtKYzVghA/exec';
-      const targetSheet = 'Quà Tặng Tầng 1';
-      const targetUrl = `${GOOGLE_SCRIPT_URL}?sheet=${encodeURIComponent(targetSheet)}&tab=${encodeURIComponent(targetSheet)}&sheetName=${encodeURIComponent(targetSheet)}&targetSheet=${encodeURIComponent(targetSheet)}`;
-
       // Tính toán điểm số Bánh xe hạnh phúc
       const scores = formData.wheelScores;
       const wheelValues = Object.values(scores);
@@ -384,123 +394,51 @@ export const FamilyHappinessMap: React.FC = () => {
       const lifePath = calculateLifePath(formData.birthDate);
       const tuViData = calculateTuVi(formData.birthDate, formData.gender);
 
-      // Tạo object tổng hợp đầy đủ tất cả thông tin trong bando
-      const payloadObj: Record<string, string> = {
-        // Thông tin người điền
-        name: formData.fullName.trim(),
-        fullName: formData.fullName.trim(),
-        'Họ và tên': formData.fullName.trim(),
-        phone: formData.phone.trim(),
-        'Số điện thoại': formData.phone.trim(),
-        email: formData.email.trim(),
-        Email: formData.email.trim(),
-        birthDate: formData.birthDate,
-        'Ngày sinh': formData.birthDate,
-        birthTime: formData.birthTime || 'Không rõ',
-        'Giờ sinh': formData.birthTime || 'Không rõ',
-        gender: formData.gender,
-        'Giới tính': formData.gender,
-        city: formData.city.trim(),
-        'Tỉnh thành': formData.city.trim(),
-        occupation: formData.occupation.trim(),
-        'Nghề nghiệp': formData.occupation.trim(),
-        lifePathNumber: String(lifePath),
-        'Số chủ đạo': String(lifePath),
-        tuViCanChi: tuViData.canChiNam,
-        'Năm Can Chi': tuViData.canChiNam,
-        tuViNguHanh: tuViData.nguHanh,
-        'Bản Mệnh': tuViData.nguHanh,
-        tuViCungMenh: tuViData.cungMenh,
-        'Cung Mệnh': tuViData.cungMenh,
-
-        // Thông tin gia đình
-        familyTime: formData.familyTime,
-        'Thời gian cho gia đình': formData.familyTime,
-        includeRelatives: formData.includeRelatives ? 'Có' : 'Không',
-        'Có người thân đi kèm': formData.includeRelatives ? 'Có' : 'Không',
-        relatives: relativesDetail,
-        'Thông tin người thân': relativesDetail,
-
-        // Điểm số Bánh xe hạnh phúc
-        healthScore: String(scores.health),
-        'Sức Khỏe': `${scores.health}/10`,
-        familyScore: String(scores.family),
-        'Gia Đình': `${scores.family}/10`,
-        financeScore: String(scores.finance),
-        'Tài Chính': `${scores.finance}/10`,
-        careerScore: String(scores.career),
-        'Sự Nghiệp': `${scores.career}/10`,
-        relationshipsScore: String(scores.relationships),
-        'Mối Quan Hệ': `${scores.relationships}/10`,
-        selfDevelopmentScore: String(scores.selfDevelopment),
-        'Phát Triển Bản Thân': `${scores.selfDevelopment}/10`,
-        spiritualityScore: String(scores.spirituality),
-        'Tinh Thần & Nội Tâm': `${scores.spirituality}/10`,
-        communityScore: String(scores.community),
-        'Đóng Góp Xã Hội': `${scores.community}/10`,
-        averageScore: avgScore,
-        'Điểm trung bình bánh xe': `${avgScore}/10`,
-        wheelScores: wheelSummary,
-        'Bánh xe hạnh phúc': wheelSummary,
-
-        // Điều mong muốn & rào cản
-        priorityArea: formData.priorityArea,
-        'Lĩnh vực ưu tiên': formData.priorityArea,
-        desireChange: formData.desireChange ? formData.desireChange.trim() : '',
-        obstacles: obstaclesText,
-        'Rào cản lớn nhất': obstaclesText,
-        wantGiftSolution: formData.wantGiftSolution,
-        'Nhận quà tặng giải pháp chi tiết': formData.wantGiftSolution,
-        supportMethods: formData.supportMethods.join(', '),
-
-        // Nhận bản đồ
-        deliveryChannels: 'Zalo / Email / Messenger',
-        'Kênh nhận bản đồ': 'Zalo / Email / Messenger',
-        consent: formData.consent ? 'Đồng ý' : 'Chưa',
-
-        // Nhận diện tab sheet "Quà Tặng Tầng 1"
-        sheet: targetSheet,
-        sheetName: targetSheet,
-        sheet_name: targetSheet,
-        tab: targetSheet,
-        tabName: targetSheet,
-        tab_name: targetSheet,
-        targetSheet: targetSheet,
-        target_sheet: targetSheet,
-        type: targetSheet,
-        action: targetSheet,
+      // Lưu toàn bộ thông tin form /bando vào tab "Quà Tặng Tầng 1"
+      const fullName = formData.fullName.trim();
+      const phone = formData.phone.trim();
+      const email = formData.email.trim();
+      await submitToSheet({
+        sheet: SHEET_TABS.bando,
         form: 'bando',
-        formType: 'BAN_DO_HANH_PHUC',
-        timestamp: new Date().toLocaleString('vi-VN'),
-        'Thời gian gửi': new Date().toLocaleString('vi-VN'),
-      };
-
-      const formDataToSend = new URLSearchParams();
-      Object.entries(payloadObj).forEach(([k, v]) => {
-        formDataToSend.append(k, v);
+        name: fullName,
+        phone,
+        email,
+        fields: {
+          'Họ Và Tên': fullName,
+          'SĐT': phone,
+          'Email': email,
+          'Ngày sinh': formData.birthDate,
+          'Giờ sinh': formData.birthTime || 'Không rõ',
+          'Giới tính': formData.gender,
+          'Tỉnh thành': formData.city.trim(),
+          'Nghề nghiệp': formData.occupation.trim(),
+          'Số chủ đạo': String(lifePath),
+          'Năm Can Chi': tuViData.canChiNam,
+          'Bản Mệnh': tuViData.nguHanh,
+          'Cung Mệnh': tuViData.cungMenh,
+          'Thời gian cho gia đình': formData.familyTime,
+          'Có người thân đi kèm': formData.includeRelatives ? 'Có' : 'Không',
+          'Thông tin người thân': relativesDetail,
+          'Sức Khỏe': `${scores.health}/10`,
+          'Gia Đình': `${scores.family}/10`,
+          'Tài Chính': `${scores.finance}/10`,
+          'Sự Nghiệp': `${scores.career}/10`,
+          'Mối Quan Hệ': `${scores.relationships}/10`,
+          'Phát Triển Bản Thân': `${scores.selfDevelopment}/10`,
+          'Tinh Thần & Nội Tâm': `${scores.spirituality}/10`,
+          'Đóng Góp Xã Hội': `${scores.community}/10`,
+          'Điểm trung bình bánh xe': `${avgScore}/10`,
+          'Bánh xe hạnh phúc': wheelSummary,
+          'Lĩnh vực ưu tiên': formData.priorityArea,
+          'Mong muốn thay đổi': formData.desireChange ? formData.desireChange.trim() : '',
+          'Rào cản lớn nhất': obstaclesText,
+          'Nhận quà tặng giải pháp chi tiết': formData.wantGiftSolution,
+          'Hình thức hỗ trợ': formData.supportMethods.join(', '),
+          'Kênh nhận bản đồ': 'Zalo / Email / Messenger',
+          'Đồng ý điều khoản': formData.consent ? 'Đồng ý' : 'Chưa',
+        },
       });
-      formDataToSend.append('payload', JSON.stringify(payloadObj));
-      formDataToSend.append('data', JSON.stringify(payloadObj));
-
-      // Gửi đồng thời theo dạng urlencoded (chuẩn Google Apps Script) và JSON text/plain
-      await Promise.allSettled([
-        fetch(targetUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          },
-          body: formDataToSend.toString(),
-        }),
-        fetch(targetUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'text/plain;charset=UTF-8',
-          },
-          body: JSON.stringify(payloadObj),
-        }),
-      ]);
     } catch (err) {
       console.log('Submission note:', err);
     } finally {
@@ -564,7 +502,6 @@ export const FamilyHappinessMap: React.FC = () => {
     });
   };
 
-  const userLifePath = useMemo(() => calculateLifePath(formData.birthDate), [formData.birthDate]);
   const tuViInfo = useMemo(() => calculateTuVi(formData.birthDate, formData.gender), [formData.birthDate, formData.gender]);
 
   const radarPoints = useMemo(() => {
@@ -693,213 +630,152 @@ export const FamilyHappinessMap: React.FC = () => {
 
         {/* VIEW KHI HOÀN TẤT */}
         {isCompleted ? (
-          <div className="space-y-10 animate-fade">
-            {/* Header Result */}
-            <div className="space-y-3.5">
-              <div className="flex items-baseline gap-2.5">
-                <span className={`text-4xl sm:text-5xl font-bold text-[#FA5B13] ${headingClass}`}>✓</span>
-                <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-widest">
-                  HOÀN TẤT KHẢO SÁT
-                </span>
-              </div>
-              <h1 className={`text-2xl sm:text-4xl text-white leading-[1.3] ${headingClass} [text-wrap:balance]`}>
-                <span className="block">Bản Đồ Hạnh Phúc Của Bạn</span>
-                <span className="block text-[#FA5B13] mt-1 not-italic font-bold font-be-vietnam">
-                  Đã Được Tạo Thành Công!
-                </span>
+          <div className="space-y-14 animate-fade">
+            {/* Lời cảm ơn */}
+            <header className="space-y-4">
+              <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Hoàn tất khảo sát</p>
+              <h1 className={`text-3xl sm:text-5xl text-white leading-[1.2] ${headingClass} [text-wrap:balance]`}>
+                Bản đồ hạnh phúc của bạn đã sẵn sàng
               </h1>
-              <p className="text-base sm:text-lg text-white leading-relaxed font-normal pt-1">
-                Cảm ơn bạn <strong className="font-bold text-white">{formData.fullName}</strong> đã dành thời gian nhìn lại chính mình và gia đình.
+              <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[56ch]">
+                Cảm ơn <strong className="font-semibold text-white">{formData.fullName}</strong> đã dành thời gian nhìn lại chính mình và gia đình.
+                Toàn bộ quà tặng và báo cáo giải pháp chi tiết sẽ được gửi qua{' '}
+                <strong className="font-semibold text-[#FFA877]">Zalo / Email / Messenger</strong> trong vòng 24 giờ.
               </p>
-            </div>
+            </header>
 
-            {/* THÔNG BÁO NHẬN QUÀ TRONG VÒNG 24H */}
-            <div className="p-6 rounded-2xl bg-gradient-to-r from-[#FA5B13]/25 via-amber-500/20 to-[#FA5B13]/25 border-2 border-[#FA5B13] backdrop-blur-md text-center shadow-xl">
-              <div className="text-3xl sm:text-4xl mb-2">🎁</div>
-              <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 font-be-vietnam">
-                Bạn Vui Lòng Kiểm Tra Zalo / Email / Messenger
-              </h3>
-              <p className="text-base sm:text-lg text-[#FFA877] font-semibold leading-relaxed">
-                Để nhận toàn bộ quà tặng và báo cáo bản đồ giải pháp chi tiết trong vòng <span className="text-white underline font-extrabold">24h</span>
-              </p>
-            </div>
+            {/* Thông tin cơ bản */}
+            <section className="space-y-5">
+              <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Thông tin của bạn</h2>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5 text-sm sm:text-base">
+                {[
+                  ['Họ và tên', formData.fullName],
+                  ['Giới tính', formData.gender],
+                  ['Ngày sinh', formData.birthDate],
+                  ['Giờ sinh', formData.birthTime || 'Không rõ'],
+                  ['Nơi sinh sống', formData.city || 'Chưa cập nhật'],
+                  ['Nghề nghiệp', formData.occupation || 'Chưa cập nhật'],
+                  ['Zalo', formData.phone],
+                  ['Email', formData.email || 'Không có'],
+                ].map(([k, v]) => (
+                  <div key={k} className="min-w-0">
+                    <dt className="text-white/55 text-xs sm:text-sm">{k}</dt>
+                    <dd className="mt-1 font-semibold text-white break-words">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
 
-            {/* THÔNG TIN CƠ BẢN BAN ĐẦU */}
-            <div className="p-6 rounded-2xl bg-black/40 border border-white/15 backdrop-blur-md space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-white/15">
-                <span className="text-xs sm:text-sm font-bold text-[#FFA877] uppercase tracking-widest">
-                  THÔNG TIN CƠ BẢN BAN ĐẦU
-                </span>
+            {/* Tử vi — bản xem nhanh */}
+            <section className="space-y-6">
+              <div className="flex items-baseline justify-between gap-4">
+                <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Tử vi & bản mệnh</h2>
+                <span className="text-sm text-white/60">{tuViInfo.amDuong}</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-sm sm:text-base">
-                <div className="flex justify-between py-1.5 border-b border-white/10">
-                  <span className="text-white/70">Họ và tên:</span>
-                  <span className="font-bold text-white">{formData.fullName}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/10">
-                  <span className="text-white/70">Giới tính:</span>
-                  <span className="font-bold text-white">{formData.gender}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/10">
-                  <span className="text-white/70">Ngày sinh (Dương lịch):</span>
-                  <span className="font-bold text-white">{formData.birthDate}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/10">
-                  <span className="text-white/70">Giờ sinh:</span>
-                  <span className="font-bold text-white">{formData.birthTime || 'Không rõ'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/10">
-                  <span className="text-white/70">Nơi sinh sống:</span>
-                  <span className="font-bold text-white">{formData.city || 'Chưa cập nhật'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/10">
-                  <span className="text-white/70">Nghề nghiệp:</span>
-                  <span className="font-bold text-white">{formData.occupation || 'Chưa cập nhật'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/10">
-                  <span className="text-white/70">Số điện thoại / Zalo:</span>
-                  <span className="font-bold text-[#FFA877]">{formData.phone}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/10">
-                  <span className="text-white/70">Email nhận tin:</span>
-                  <span className="font-bold text-white">{formData.email || 'Không có'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* BẢNG TỬ VI & BẢN MỆNH CÁ NHÂN */}
-            <div className="p-6 rounded-2xl bg-black/40 border border-white/15 backdrop-blur-md space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-white/15">
-                <span className="text-xs sm:text-sm font-bold text-[#FFA877] uppercase tracking-widest">
-                  BẢNG TỬ VI & BẢN MỆNH CÁ NHÂN
-                </span>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded bg-[#FA5B13]/30 text-[#FFA877] border border-[#FA5B13]/50">
-                  {tuViInfo.amDuong}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-sm sm:text-base">
-                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                  <span className="text-xs uppercase tracking-wider text-white/60 block">Năm Sinh Can Chi</span>
-                  <span className="text-base sm:text-lg font-bold text-white block">{tuViInfo.canChiNam} ({tuViInfo.namSinh})</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                  <span className="text-xs uppercase tracking-wider text-white/60 block">Bản Mệnh (Ngũ Hành Nạp Âm)</span>
-                  <span className="text-base sm:text-lg font-bold text-[#FFA877] block">{tuViInfo.nguHanh}</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                  <span className="text-xs uppercase tracking-wider text-white/60 block">Cung Phi Bát Trạch</span>
-                  <span className="text-base sm:text-lg font-bold text-white block">{tuViInfo.cungMenh}</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                  <span className="text-xs uppercase tracking-wider text-white/60 block">Con Số Đường Đời (Thần Số Học)</span>
-                  <span className="text-base sm:text-lg font-bold text-[#FA5B13] block">Số {userLifePath}</span>
-                </div>
-                <div className="sm:col-span-2 p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
-                  <span className="text-xs uppercase tracking-wider text-white/60 block">Vị Trí Cung Mệnh & Thân</span>
-                  <p className="text-sm sm:text-base text-white">
-                    <strong className="text-[#FFA877]">{tuViInfo.cungMenhViTri}</strong> &bull; <strong className="text-[#FFA877]">{tuViInfo.cungThanViTri}</strong> &bull; {tuViInfo.tinhChatMenh}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-white/55 text-sm">Năm sinh Can Chi</p>
+                  <p className={`mt-1 text-2xl sm:text-3xl text-white ${headingClass}`}>
+                    {tuViInfo.canChiNam} <span className="text-white/50 text-lg sm:text-xl">· {tuViInfo.namSinh}</span>
                   </p>
                 </div>
-                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                  <span className="text-xs uppercase tracking-wider text-white/60 block">Cung Phu Thê (Gia Đạo)</span>
-                  <span className="text-sm sm:text-base text-white/90 block">{tuViInfo.phuThe}</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                  <span className="text-xs uppercase tracking-wider text-white/60 block">Cung Tài Bạch</span>
-                  <span className="text-sm sm:text-base text-white/90 block">{tuViInfo.taiBach}</span>
+                <div>
+                  <p className="text-white/55 text-sm">Bản mệnh (Ngũ hành nạp âm)</p>
+                  <p className={`mt-1 text-2xl sm:text-3xl text-[#FFA877] ${headingClass}`}>{tuViInfo.nguHanh}</p>
                 </div>
               </div>
-            </div>
+              <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[60ch]">
+                Đây mới là bản xem nhanh. Muốn nhận thêm phần luận giải{' '}
+                <span className="text-white/60">Cung Phi Bát Trạch, Cung Mệnh & Thân, Cung Phu Thê, Cung Tài Bạch</span>,
+                vui lòng chờ vài phút để được nhận kết quả qua <strong className="font-semibold text-white">Zalo / Messenger</strong>.
+              </p>
+            </section>
 
-            {/* Radar Diagram & Analysis */}
-            <div className="py-6 border-y border-white/10 flex flex-col md:flex-row items-center justify-between gap-8">
-              <div className="relative w-[280px] sm:w-[300px] h-[280px] sm:h-[300px] shrink-0 mx-auto">
-                <svg width="280" height="280" viewBox="0 0 300 300" className="overflow-visible">
-                  {[0.2, 0.4, 0.6, 0.8, 1.0].map((level, lIdx) => {
-                    const pts = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+            {/* Bánh xe hạnh phúc */}
+            <section className="space-y-6">
+              <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Bánh xe hạnh phúc</h2>
+              <div className="flex flex-col md:flex-row items-center gap-8 md:gap-10">
+                <div className="relative w-[280px] sm:w-[300px] h-[280px] sm:h-[300px] shrink-0 mx-auto">
+                  <svg width="280" height="280" viewBox="0 0 300 300" className="overflow-visible">
+                    {[0.2, 0.4, 0.6, 0.8, 1.0].map((level, lIdx) => {
+                      const pts = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+                        const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
+                        const r = 115 * level;
+                        return `${150 + r * Math.cos(angle)},${150 + r * Math.sin(angle)}`;
+                      }).join(' ');
+                      return (
+                        <polygon
+                          key={lIdx}
+                          points={pts}
+                          fill="none"
+                          stroke="rgba(255, 255, 255, 0.18)"
+                          strokeWidth="1"
+                        />
+                      );
+                    })}
+
+                    {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
                       const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-                      const r = 115 * level;
-                      return `${150 + r * Math.cos(angle)},${150 + r * Math.sin(angle)}`;
-                    }).join(' ');
-                    return (
-                      <polygon
-                        key={lIdx}
-                        points={pts}
-                        fill="none"
-                        stroke="rgba(255, 255, 255, 0.18)"
-                        strokeWidth="1"
-                      />
-                    );
-                  })}
+                      const x2 = 150 + 115 * Math.cos(angle);
+                      const y2 = 150 + 115 * Math.sin(angle);
+                      return (
+                        <line
+                          key={i}
+                          x1="150"
+                          y1="150"
+                          x2={x2}
+                          y2={y2}
+                          stroke="rgba(255, 255, 255, 0.18)"
+                          strokeWidth="1"
+                        />
+                      );
+                    })}
 
-                  {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-                    const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-                    const x2 = 150 + 115 * Math.cos(angle);
-                    const y2 = 150 + 115 * Math.sin(angle);
-                    return (
-                      <line
-                        key={i}
-                        x1="150"
-                        y1="150"
-                        x2={x2}
-                        y2={y2}
-                        stroke="rgba(255, 255, 255, 0.18)"
-                        strokeWidth="1"
-                      />
-                    );
-                  })}
+                    <polygon
+                      points={radarPoints}
+                      fill="rgba(250, 91, 19, 0.35)"
+                      stroke="#FA5B13"
+                      strokeWidth="2.5"
+                    />
 
-                  <polygon
-                    points={radarPoints}
-                    fill="rgba(250, 91, 19, 0.35)"
-                    stroke="#FA5B13"
-                    strokeWidth="2.5"
-                  />
-
-                  {LIFE_AREAS.map((area, i) => {
+                    {LIFE_AREAS.map((area, i) => {
+                      const score = formData.wheelScores[area.key as keyof typeof formData.wheelScores];
+                      const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
+                      const r = (score / 10) * 115;
+                      const x = 150 + r * Math.cos(angle);
+                      const y = 150 + r * Math.sin(angle);
+                      return (
+                        <circle
+                          key={i}
+                          cx={x}
+                          cy={y}
+                          r="4.5"
+                          fill="#FFFFFF"
+                          stroke="#FA5B13"
+                          strokeWidth="2"
+                        />
+                      );
+                    })}
+                  </svg>
+                </div>
+                <ul className="w-full space-y-3.5">
+                  {LIFE_AREAS.map((area) => {
                     const score = formData.wheelScores[area.key as keyof typeof formData.wheelScores];
-                    const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-                    const r = (score / 10) * 115;
-                    const x = 150 + r * Math.cos(angle);
-                    const y = 150 + r * Math.sin(angle);
                     return (
-                      <circle
-                        key={i}
-                        cx={x}
-                        cy={y}
-                        r="4.5"
-                        fill="#FFFFFF"
-                        stroke="#FA5B13"
-                        strokeWidth="2"
-                      />
+                      <li key={area.key} className="flex items-center justify-between gap-3 text-sm sm:text-base">
+                        <span className="text-white/90 truncate">{area.label}</span>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="w-24 sm:w-28 bg-white/15 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-[#FA5B13] h-full rounded-full" style={{ width: `${score * 10}%` }} />
+                          </div>
+                          <span className="font-semibold text-white w-10 text-right tabular-nums">{score}/10</span>
+                        </div>
+                      </li>
                     );
                   })}
-                </svg>
+                </ul>
               </div>
-
-              {/* Linear Breakdown List (Chữ lớn rõ ràng) */}
-              <div className="w-full space-y-3">
-                {LIFE_AREAS.map((area) => {
-                  const score = formData.wheelScores[area.key as keyof typeof formData.wheelScores];
-                  return (
-                    <div key={area.key} className="flex items-center justify-between py-2 border-b border-white/10 text-sm sm:text-base">
-                      <span className="text-white font-medium truncate pr-2">{area.label}</span>
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <div className="w-24 sm:w-28 bg-white/15 h-2 rounded-full overflow-hidden">
-                          <div
-                            className="bg-[#FA5B13] h-full rounded-full"
-                            style={{ width: `${score * 10}%` }}
-                          />
-                        </div>
-                        <span className="font-bold text-white w-9 text-right text-sm sm:text-base">
-                          {score}/10
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            </section>
           </div>
         ) : (
           /* LINEAR MULTI-STEP QUESTIONS - CHỮ LỚN RÕ RÀNG */
@@ -1158,6 +1034,8 @@ export const FamilyHappinessMap: React.FC = () => {
                       <input
                         type="date"
                         value={formData.birthDate}
+                        min={MIN_BIRTH_DATE}
+                        max={todayISO()}
                         onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
                         className="w-full py-3 sm:py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white transition-all bg-black/35 backdrop-blur-xs [color-scheme:dark]"
                       />
@@ -1359,6 +1237,8 @@ export const FamilyHappinessMap: React.FC = () => {
                             <input
                               type="date"
                               value={rel.birthDate}
+                              min={MIN_BIRTH_DATE}
+                              max={todayISO()}
                               onChange={(e) => updateRelative(idx, 'birthDate', e.target.value)}
                               className="py-2.5 px-3.5 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-sm sm:text-base text-white bg-black/35 [color-scheme:dark]"
                             />
@@ -1378,6 +1258,11 @@ export const FamilyHappinessMap: React.FC = () => {
                                 </button>
                               ))}
                             </div>
+                            {[errors[`rel_rel_${idx}`], errors[`rel_dob_${idx}`], errors[`rel_gender_${idx}`]]
+                              .filter(Boolean)
+                              .map((msg) => (
+                                <p key={msg} className="text-sm text-red-300 font-medium">{msg}</p>
+                              ))}
                           </div>
                         </div>
                       ))}
@@ -1392,6 +1277,7 @@ export const FamilyHappinessMap: React.FC = () => {
                           <span>Thêm một người thân nữa ({formData.relatives.length}/3)</span>
                         </button>
                       )}
+                      {errors.relatives && <p className="text-sm text-red-300 font-medium">{errors.relatives}</p>}
                     </div>
                   )}
                 </div>

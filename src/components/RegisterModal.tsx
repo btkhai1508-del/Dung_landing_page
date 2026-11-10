@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { submitToSheet } from '../lib/submitToSheet';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -12,9 +13,10 @@ interface RegisterModalProps {
   submitLabel?: string;
   successMessage?: string;
   formType?: string;
+  /** Tab Google Sheet để lưu. Bỏ trống → tab đầu tiên (Thông tin). */
+  sheetName?: string;
 }
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVvzC75rDJbWAJ-J-xHxG34x0MAsrJvvFAfnNKh_0PVN7YfqK9y1ttFKYHoZtKYzVghA/exec';
 
 export const RegisterModal: React.FC<RegisterModalProps> = ({
   isOpen,
@@ -27,6 +29,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   submitLabel = 'GỬI BỘ QUÀ TẶNG & VÉ MIỄN PHÍ CHO TÔI',
   successMessage = '✓ Đã giữ chỗ thành công! Bộ quà tặng và vé đang được chuyển tiếp tới bạn.',
   formType = 'QUA_TANG_MIEN_PHI',
+  sheetName,
 }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -43,58 +46,18 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      // Gửi dữ liệu vào tab sheet "Quà Tặng Tầng 1" của Google Sheets theo đúng yêu cầu
-      const targetSheet = 'Quà Tặng Tầng 1';
-      const targetUrl = `${GOOGLE_SCRIPT_URL}?sheet=${encodeURIComponent(targetSheet)}&tab=${encodeURIComponent(targetSheet)}&sheetName=${encodeURIComponent(targetSheet)}&targetSheet=${encodeURIComponent(targetSheet)}`;
-
-      const payloadObj: Record<string, string> = {
+      await submitToSheet({
+        sheet: sheetName,
+        form: formType,
         name: name.trim(),
-        fullName: name.trim(),
-        'Họ và tên': name.trim(),
         phone: phone.trim(),
-        'Số điện thoại': phone.trim(),
         email: email.trim(),
-        Email: email.trim(),
-        sheet: targetSheet,
-        sheetName: targetSheet,
-        sheet_name: targetSheet,
-        tab: targetSheet,
-        tabName: targetSheet,
-        tab_name: targetSheet,
-        targetSheet: targetSheet,
-        target_sheet: targetSheet,
-        type: targetSheet,
-        action: targetSheet,
-        formType: formType,
-        timestamp: new Date().toLocaleString('vi-VN'),
-        'Thời gian gửi': new Date().toLocaleString('vi-VN'),
-      };
-
-      const formData = new URLSearchParams();
-      Object.entries(payloadObj).forEach(([k, v]) => {
-        formData.append(k, v);
+        fields: {
+          'Họ Và Tên': name.trim(),
+          'SĐT': phone.trim(),
+          'Email': email.trim(),
+        },
       });
-      formData.append('payload', JSON.stringify(payloadObj));
-      formData.append('data', JSON.stringify(payloadObj));
-
-      await Promise.allSettled([
-        fetch(targetUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          },
-          body: formData.toString(),
-        }),
-        fetch(targetUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'text/plain;charset=UTF-8',
-          },
-          body: JSON.stringify(payloadObj),
-        }),
-      ]);
     } catch (err) {
       console.error('Lỗi gửi form:', err);
     } finally {

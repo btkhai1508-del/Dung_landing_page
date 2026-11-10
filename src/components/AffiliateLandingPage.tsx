@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Menu, X, Sprout, ArrowRight } from 'lucide-react';
 import { RegisterModal } from './RegisterModal';
+import { SHEET_TABS } from '../lib/submitToSheet';
 
 const ASSETS = {
   heroBundle: '/assets/aistudio/1_c1ec481e.webp',
@@ -1203,6 +1204,7 @@ export const AffiliateLandingPage: React.FC = () => {
         submitLabel="GIỮ CHỖ THỬ THÁCH CHO TÔI"
         successMessage="✓ Đã giữ chỗ thành công! Đang chuyển bạn sang bước cuối cùng…"
         formType="THU_THACH_AFFILIATE"
+        sheetName={SHEET_TABS.affiliate}
       />
     </div>
   );

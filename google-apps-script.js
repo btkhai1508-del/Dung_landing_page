@@ -23,39 +23,47 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    let customerName = "";
-    let customerPhone = "";
-    let customerEmail = "";
-
-    // Đọc dữ liệu từ form website (hỗ trợ cả URLSearchParams và JSON)
-    if (e && e.parameter && (e.parameter.name || e.parameter.email || e.parameter.phone)) {
-      customerName = e.parameter.name || "";
-      customerPhone = e.parameter.phone || "";
-      customerEmail = e.parameter.email || "";
-    } else if (e && e.postData && e.postData.contents) {
-      try {
-        const body = JSON.parse(e.postData.contents);
-        customerName = body.name || "";
-        customerPhone = body.phone || "";
-        customerEmail = body.email || "";
-      } catch (err) {}
+    const params = (e && e.parameter) || {};
+    let body = {};
+    if (e && e.postData && e.postData.contents && e.postData.type !== "application/x-www-form-urlencoded") {
+      try { body = JSON.parse(e.postData.contents); } catch (err) {}
     }
+    const get = (key) => String(params[key] || body[key] || "").trim();
 
-    customerName = (customerName || "").trim();
-    customerPhone = (customerPhone || "").trim();
-    customerEmail = (customerEmail || "").trim();
+    const customerName = get("name");
+    const customerPhone = get("phone");
+    const customerEmail = get("email");
+    const sheetName = get("sheet");   // "Quà Tặng Tầng 1" (/bando), "Affiliate", hoặc rỗng = tab đầu tiên
+    const formType = get("form");
+
+    // Các cột cần ghi (tiêu đề → giá trị), theo đúng thứ tự frontend gửi lên
+    let fields = {};
+    try { fields = JSON.parse(get("fields") || "{}"); } catch (err) {}
+    if (Object.keys(fields).length === 0) {
+      fields = { "Họ Và Tên": customerName, "SĐT": customerPhone, "Email": customerEmail };
+    }
 
     const timestamp = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 
-    // 1. Lưu thông tin vào 4 cột: Thời Gian, Họ Và Tên, SĐT, Email
+    // 1. Lưu vào đúng tab Google Sheet
     try {
       const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      const sheet = ss.getSheets()[0] || ss.getActiveSheet();
-      
-      if (sheet.getLastRow() === 0) {
-        sheet.appendRow(["Thời Gian", "Họ Và Tên", "SĐT", "Email"]);
+      const sheet = getTargetSheet(ss, sheetName);
+      const row = Object.assign({ "Thời Gian": timestamp }, fields);
+
+      if (normalizeName(sheet.getName()) === normalizeName(BANDO_SHEET)) {
+        // Tab "Quà Tặng Tầng 1": cột đầu tiên là Mã DDMMXXX (XXX = STT trong ngày, 001–999)
+        const lock = LockService.getScriptLock();
+        lock.waitLock(15000);
+        try {
+          ensureFirstColumn(sheet, CODE_HEADER);
+          appendRowByHeaders(sheet, Object.assign({ [CODE_HEADER]: "'" + nextDailyCode(sheet.getName()) }, row));
+        } finally {
+          lock.releaseLock();
+        }
+      } else {
+        appendRowByHeaders(sheet, row);
       }
-      sheet.appendRow([timestamp, customerName, customerPhone, customerEmail]);
     } catch (sheetError) {
       Logger.log("Lỗi ghi Google Sheet: " + sheetError.toString());
     }
@@ -67,6 +75,8 @@ function doPost(e) {
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
+      sheet: sheetName || "(tab đầu tiên)",
+      form: formType,
       saved: { name: customerName, phone: customerPhone, email: customerEmail }
     })).setMimeType(ContentService.MimeType.JSON);
 
@@ -76,6 +86,78 @@ function doPost(e) {
       message: error.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+const BANDO_SHEET = "Quà Tặng Tầng 1";
+const CODE_HEADER = "Mã";
+
+// Sinh mã DDMMXXX theo giờ Việt Nam. XXX đếm lại từ 001 mỗi ngày (lưu trong Script Properties).
+function nextDailyCode(sheetName) {
+  const now = new Date();
+  const dd = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd");
+  const mm = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "MM");
+  const dayKey = "seq_" + normalizeName(sheetName) + "_" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd");
+  const props = PropertiesService.getScriptProperties();
+  const seq = Number(props.getProperty(dayKey) || "0") + 1;
+  props.setProperty(dayKey, String(seq));
+  return dd + mm + String(seq).padStart(3, "0");
+}
+
+// Đảm bảo cột `header` nằm ở cột A. Tab cũ chưa có thì chèn thêm 1 cột vào đầu.
+function ensureFirstColumn(sheet, header) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1).setValue(header);
+    return;
+  }
+  const first = String(sheet.getRange(1, 1).getValue());
+  if (normalizeName(first) !== normalizeName(header)) {
+    sheet.insertColumnBefore(1);
+    sheet.getRange(1, 1).setValue(header);
+  }
+}
+
+// Chuẩn hoá tên để so khớp: bỏ dấu, không phân biệt hoa thường, gộp khoảng trắng
+function normalizeName(text) {
+  return String(text || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d").replace(/Đ/g, "D")
+    .toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// Tìm tab theo tên (không phân biệt hoa thường/dấu). Không có tên → tab đầu tiên.
+// Chưa có tab → tự tạo mới.
+function getTargetSheet(ss, sheetName) {
+  if (!sheetName) return ss.getSheets()[0];
+  const wanted = normalizeName(sheetName);
+  const found = ss.getSheets().find((s) => normalizeName(s.getName()) === wanted);
+  return found || ss.insertSheet(sheetName);
+}
+
+// Ghi 1 dòng theo hàng tiêu đề (dòng 1) của tab: cột nào khớp tiêu đề thì ghi vào đó,
+// tiêu đề chưa có thì tự thêm cột mới ở cuối.
+function appendRowByHeaders(sheet, data) {
+  const lastCol = sheet.getLastColumn();
+  let headers = (sheet.getLastRow() > 0 && lastCol > 0)
+    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String)
+    : [];
+  const normalized = headers.map(normalizeName);
+
+  const row = new Array(headers.length).fill("");
+  Object.keys(data).forEach((key) => {
+    let idx = normalized.indexOf(normalizeName(key));
+    if (idx === -1) {
+      headers.push(key);
+      normalized.push(normalizeName(key));
+      row.push("");
+      idx = headers.length - 1;
+    }
+    row[idx] = data[key];
+  });
+
+  if (headers.length > 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  sheet.appendRow(row);
 }
 
 /**
