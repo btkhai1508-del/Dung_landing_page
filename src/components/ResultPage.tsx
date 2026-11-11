@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { GOOGLE_SCRIPT_URL } from '../lib/submitToSheet';
 import { buildReport, parseBirthDate, Report, ReportInput, RelativeInput } from '../lib/report';
 import { AREAS, AreaKey } from '../data/lifeWheel';
+import { ZaloPopups, ZaloOpenButton } from './ZaloPopup';
 
 // ---------- Tra cứu dữ liệu từ Apps Script ----------
 interface LookupRecord {
@@ -630,12 +631,12 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
                 {n.chart.arrowsMissing.map((a) => <Pair key={a.name} label={a.name} text={a.text} />)}
               </div>
             )}
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-semibold text-[#FFA877] select-none">Xem ý nghĩa từng con số trong biểu đồ</summary>
-              <div className="mt-4 grid sm:grid-cols-2 gap-x-8 gap-y-5">
+            <div className="space-y-4 pt-2">
+              <Sub>Ý nghĩa từng con số trong biểu đồ</Sub>
+              <div className="grid sm:grid-cols-2 gap-x-8 gap-y-5">
                 {n.chart.digits.map((d) => <Pair key={d.n} label={`Số ${d.n} · ${d.domain}`} text={d.text} />)}
               </div>
-            </details>
+            </div>
           </div>
 
           {(n.karmic.debts.length > 0 || n.karmic.lessons.length > 0) && (
@@ -750,6 +751,10 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
           </div>
           <p className="text-[15px] text-white/75 leading-relaxed">{r.plan.yearNote}</p>
         </Section>
+
+        {/* Bước cuối: cửa sổ vào nhóm Zalo GH3 (tự mở khi đọc đến cuối trang) */}
+        <div className="text-center"><ZaloOpenButton /></div>
+        <ZaloPopups />
 
         <footer className="pt-6 pb-10 space-y-3 text-center">
           <p className={`text-xl text-white/90 ${heading}`}>“Tương lai không được dự đoán, tương lai được tạo ra bởi những gì bạn làm hôm nay.”</p>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { submitToSheet, SHEET_TABS } from '../lib/submitToSheet';
 import { BirthDateInput, isoToVN } from './BirthDateInput';
+import { ZaloPopups, ZaloOpenButton } from './ZaloPopup';
 import { computeNumerology } from '../lib/numerology';
 import { computeTuVi } from '../lib/tuviEngine';
 import {
@@ -383,7 +384,7 @@ export const FamilyHappinessMap: React.FC = () => {
           'Rào cản lớn nhất': obstaclesText,
           'Nhận quà tặng giải pháp chi tiết': formData.wantGiftSolution,
           'Hình thức hỗ trợ': formData.supportMethods.join(', '),
-          'Kênh nhận bản đồ': 'Zalo / Email / Messenger',
+          'Kênh nhận bản đồ': 'Nhóm Zalo GH3',
           'Đồng ý điều khoản': formData.consent ? 'Đồng ý' : 'Chưa',
           // Dữ liệu có cấu trúc để trang /ketqua dựng báo cáo (không phụ thuộc vào cách ghép chuỗi)
           'Dữ liệu báo cáo': JSON.stringify({
@@ -601,10 +602,12 @@ export const FamilyHappinessMap: React.FC = () => {
               </h1>
               <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[56ch]">
                 Cảm ơn {formData.fullName.trim() ? <strong className="font-semibold text-white">{formData.fullName.trim()}</strong> : 'bạn'} đã dành thời gian nhìn lại chính mình và gia đình.
-                Toàn bộ quà tặng và báo cáo giải pháp chi tiết sẽ được gửi qua{' '}
-                <strong className="font-semibold text-[#FFA877]">Zalo / Email / Messenger</strong> trong vòng 24 giờ.
+                Bước cuối cùng: hãy vào <strong className="font-semibold text-[#FFA877]">nhóm Zalo GH3</strong> bên dưới để nhận kết quả phân tích tử vi và thần số học chi tiết.
               </p>
             </header>
+
+            {/* Nhóm Zalo GH3: cửa sổ tự mở khi đọc đến cuối trang */}
+            <ZaloPopups />
 
             {/* Thông tin cơ bản */}
             <section className="space-y-5">
@@ -649,7 +652,7 @@ export const FamilyHappinessMap: React.FC = () => {
               <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[60ch]">
                 Đây mới là bản xem nhanh. Muốn nhận thêm phần luận giải{' '}
                 <span className="text-white/60">Cung Phi Bát Trạch, Cung Mệnh & Thân, Cung Phu Thê, Cung Tài Bạch</span>,
-                vui lòng chờ vài phút để được nhận kết quả qua <strong className="font-semibold text-white">Zalo / Messenger</strong>.
+                hãy vào <strong className="font-semibold text-white">nhóm Zalo GH3</strong> ở trên để nhận kết quả phân tích chi tiết.
               </p>
             </section>
 
@@ -738,6 +741,8 @@ export const FamilyHappinessMap: React.FC = () => {
                 </ul>
               </div>
             </section>
+
+            <div className="text-center"><ZaloOpenButton /></div>
           </div>
         ) : (
           /* LINEAR MULTI-STEP QUESTIONS - CHỮ LỚN RÕ RÀNG */

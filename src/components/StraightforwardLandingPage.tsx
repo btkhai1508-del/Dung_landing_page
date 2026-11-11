@@ -8,12 +8,10 @@ import {
   Compass,
 } from 'lucide-react';
 import { RegisterModal } from './RegisterModal';
-import { FigmaReferenceModal } from './FigmaReferenceModal';
 import { ThankYouPage } from './ThankYouPage';
 
 export const StraightforwardLandingPage: React.FC = () => {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [isFigmaModalOpen, setIsFigmaModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isThankYouOpen, setIsThankYouOpen] = useState(false);
 
@@ -647,28 +645,10 @@ export const StraightforwardLandingPage: React.FC = () => {
               <button onClick={goToBando} className="hover:text-black cursor-pointer">
                 Khảo sát Bản Đồ ngay
               </button>
-              <button onClick={() => setIsFigmaModalOpen(true)} className="hover:text-[#FA5B13] font-semibold cursor-pointer">
-                Figma Kit
-              </button>
             </div>
           </div>
         </footer>
       </main>
-
-      {/* FLOATING ACTION BUTTON (GÓC PHẢI DƯỚI): NÚT POP UP FIGMA REFERENCE */}
-      <div className="fixed bottom-6 right-6 z-40 font-be-vietnam">
-        <button
-          onClick={() => setIsFigmaModalOpen(true)}
-          className="flex items-center gap-2.5 px-4 py-3 bg-[#191A23] hover:bg-black text-white rounded-full shadow-2xl border-2 border-[#FA5B13] transition-all transform hover:scale-105 active:scale-95 cursor-pointer group"
-          title="Xem tài liệu và hình ảnh Figma Reference"
-        >
-          <span className="w-2.5 h-2.5 rounded-full bg-[#FA5B13] animate-pulse" />
-          <span className="font-bold text-xs">Figma Reference</span>
-          <span className="text-[10px] bg-white/20 text-[#FFAE33] px-1.5 py-0.5 rounded-md">
-            UI Kit
-          </span>
-        </button>
-      </div>
 
       {/* POPUP MODAL ĐIỀN THÔNG TIN NHẬN QUÀ */}
       <RegisterModal
@@ -678,12 +658,6 @@ export const StraightforwardLandingPage: React.FC = () => {
           setIsRegisterOpen(false);
           setIsThankYouOpen(true);
         }}
-      />
-
-      {/* POPUP MODAL XEM FIGMA REFERENCE */}
-      <FigmaReferenceModal
-        isOpen={isFigmaModalOpen}
-        onClose={() => setIsFigmaModalOpen(false)}
       />
     </div>
   );
