@@ -190,7 +190,7 @@ const TuViChart: React.FC<{ report: Report }> = ({ report }) => {
             if (ri === 1 && ci === 1) {
               return (
                 <div key="center" className="col-span-2 row-span-2 rounded-2xl bg-white/[0.04] p-3 sm:p-5 flex flex-col justify-center text-center">
-                  <p className={`text-lg sm:text-2xl text-white ${heading}`}>{report.name}</p>
+                  <p className={`text-lg sm:text-2xl text-white ${heading}`}>{report.name || 'Lá số của bạn'}</p>
                   <p className="mt-1 text-[11px] sm:text-sm text-white/60">{report.tuvi.lunarText}</p>
                   <p className="mt-2 text-[11px] sm:text-sm text-white/80">{report.tuvi.canChi} · {report.tuvi.amDuong}</p>
                   <p className="text-[11px] sm:text-sm text-[#FFA877]">{report.tuvi.napAm.name}</p>
@@ -326,8 +326,8 @@ export const ResultPage: React.FC = () => {
 // ---------- Báo cáo ----------
 const NAV = [
   ['tong-quan', 'Tổng quan'],
-  ['than-so-hoc', 'Thần số học'],
   ['tu-vi', 'Tử vi'],
+  ['than-so-hoc', 'Thần số học'],
   ['banh-xe', 'Bánh xe'],
   ['gia-dinh', 'Gia đình'],
   ['ke-hoach', 'Kế hoạch'],
@@ -379,125 +379,8 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
           </div>
         </section>
 
-        {/* THẦN SỐ HỌC */}
-        <Section id="than-so-hoc" label="Phần 1" title="Thần số học" intro="Các con số sinh ra từ ngày sinh và tên đầy đủ của bạn, mô tả xu hướng tự nhiên, tài năng và bài học theo từng giai đoạn.">
-          <div className="space-y-6">
-            <div className="flex items-end gap-5">
-              <span className={`text-8xl sm:text-9xl leading-none text-[#FA5B13] ${heading}`}>{lp.value}</span>
-              <div className="pb-3">
-                <p className={eyebrow}>Số chủ đạo{lp.master ? ' · Số bậc thầy' : ''}</p>
-                <p className={`text-2xl sm:text-3xl text-white ${heading}`}>{lp.title}</p>
-                <p className="text-sm text-white/55 mt-1">{lp.info.keywords.join(' · ')}</p>
-              </div>
-            </div>
-            <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[64ch]">{lp.info.essence}</p>
-            <div className="grid sm:grid-cols-2 gap-8">
-              <div className="space-y-3"><Sub>Điểm mạnh</Sub><Bullets items={lp.info.strengths} /></div>
-              <div className="space-y-3"><Sub>Điều cần lưu ý</Sub><Bullets items={lp.info.challenges} tone="care" /></div>
-            </div>
-            <div className={`${soft} grid sm:grid-cols-2 gap-x-8 gap-y-6`}>
-              <Pair label="Sự nghiệp" text={lp.info.career} />
-              <Pair label="Tình yêu" text={lp.info.love} />
-              <Pair label="Gia đình" text={lp.info.family} />
-              <Pair label="Tiền bạc" text={lp.info.money} />
-              <Pair label="Sức khỏe" text={lp.info.health} />
-              <Pair label="Khi mất cân bằng" text={lp.info.shadow} />
-            </div>
-            <p className="text-base sm:text-lg text-white/85 leading-relaxed"><span className="text-[#FFA877] font-semibold">Điều bạn có thể chủ động: </span>{lp.info.growth}</p>
-            <p className={`text-xl sm:text-2xl text-white ${heading}`}>“{lp.info.mantra}”</p>
-          </div>
-
-          {n.core.length > 0 && (
-            <div className="space-y-4">
-              <Sub>Các con số cốt lõi</Sub>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {n.core.map((c) => (
-                  <div key={c.label} className={soft}>
-                    <div className="flex items-baseline gap-3">
-                      <span className={`text-4xl text-[#FA5B13] ${heading}`}>{c.value}</span>
-                      <span className="text-sm font-semibold text-white/70">{c.label}</span>
-                    </div>
-                    <p className="mt-2 text-[15px] text-white/85 leading-relaxed">{c.text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Chu kỳ */}
-          <div className="space-y-5">
-            <Sub>Năm {n.cycles.year} của bạn</Sub>
-            <div className={`${soft} space-y-4`}>
-              <div className="flex items-baseline gap-3">
-                <span className={`text-5xl text-[#FA5B13] ${heading}`}>{n.cycles.personalYear.value}</span>
-                <span className={`text-xl sm:text-2xl text-white ${heading}`}>{n.cycles.personalYear.title}</span>
-              </div>
-              <p className="text-[15px] sm:text-base text-white/85 leading-relaxed">{n.cycles.personalYear.theme}</p>
-              <div className="grid sm:grid-cols-2 gap-6">
-                <div className="space-y-2"><Sub>Nên tập trung</Sub><Bullets items={n.cycles.personalYear.focus} /></div>
-                <div className="space-y-2"><Sub>Nên tránh</Sub><Bullets items={n.cycles.personalYear.avoid} tone="care" /></div>
-              </div>
-              <div className="grid sm:grid-cols-3 gap-5 pt-1">
-                <Pair label="Tình cảm" text={n.cycles.personalYear.love} />
-                <Pair label="Tiền bạc" text={n.cycles.personalYear.money} />
-                <Pair label="Công việc" text={n.cycles.personalYear.career} />
-              </div>
-              <p className="text-sm text-white/65 leading-relaxed pt-1">Tháng {n.cycles.personalMonth.month} này: {n.cycles.personalMonth.text}</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <Sub>Bốn đỉnh cao cuộc đời</Sub>
-            <ol className="space-y-3">
-              {n.cycles.pinnacles.map((p) => (
-                <li key={p.index} className={`rounded-2xl p-5 ${p.current ? 'bg-[#FA5B13]/20' : 'bg-white/[0.04]'}`}>
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className={`text-3xl ${heading} ${p.current ? 'text-white' : 'text-[#FA5B13]'}`}>{p.value}</span>
-                    <span className="text-sm font-semibold text-white/80">Đỉnh cao {p.index} · {p.ages}</span>
-                    {p.current && <span className="rounded-full bg-[#FA5B13] px-2.5 py-0.5 text-xs font-bold">Đang ở đây</span>}
-                  </div>
-                  <p className="mt-2 text-[15px] text-white/85 leading-relaxed">{p.text}</p>
-                  <p className="mt-2 text-sm text-white/60 leading-relaxed">{p.challengeText}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          {/* Biểu đồ ngày sinh */}
-          <div className="space-y-5">
-            <Sub>Biểu đồ ngày sinh</Sub>
-            <div className="flex flex-col sm:flex-row gap-8 items-start">
-              <BirthGrid digits={n.chart.digits} />
-              <div className="space-y-4 flex-1">
-                {n.chart.planes.map((p) => (
-                  <Pair key={p.name} label={`${p.name} (${p.count} số)`} text={p.text} />
-                ))}
-              </div>
-            </div>
-            {(n.chart.arrowsPresent.length > 0 || n.chart.arrowsMissing.length > 0) && (
-              <div className={`${soft} space-y-4`}>
-                {n.chart.arrowsPresent.map((a) => <Pair key={a.name} label={a.name} text={a.text} />)}
-                {n.chart.arrowsMissing.map((a) => <Pair key={a.name} label={a.name} text={a.text} />)}
-              </div>
-            )}
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-semibold text-[#FFA877] select-none">Xem ý nghĩa từng con số trong biểu đồ</summary>
-              <div className="mt-4 grid sm:grid-cols-2 gap-x-8 gap-y-5">
-                {n.chart.digits.map((d) => <Pair key={d.n} label={`Số ${d.n} · ${d.domain}`} text={d.text} />)}
-              </div>
-            </details>
-          </div>
-
-          {(n.karmic.debts.length > 0 || n.karmic.lessons.length > 0) && (
-            <div className="space-y-4">
-              <Sub>Bài học nghiệp</Sub>
-              <Bullets items={[...n.karmic.debts, ...n.karmic.lessons]} tone="care" />
-            </div>
-          )}
-        </Section>
-
         {/* TỬ VI */}
-        <Section id="tu-vi" label="Phần 2" title="Tử vi & Bản mệnh" intro="Tính theo âm lịch và 60 hoa giáp; phần lá số lập theo tháng, ngày, giờ sinh. Nội dung mang tính tham khảo, giúp bạn hiểu thêm xu hướng của bản thân.">
+        <Section id="tu-vi" label="Phần 1" title="Tử vi & Bản mệnh" intro="Tính theo âm lịch và 60 hoa giáp; phần lá số lập theo tháng, ngày, giờ sinh. Nội dung mang tính tham khảo, giúp bạn hiểu thêm xu hướng của bản thân.">
           <div className="space-y-6">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <span className={`text-4xl sm:text-5xl text-white ${heading}`}>{t.canChi}</span>
@@ -637,6 +520,129 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
             </div>
           ) : (
             <p className="text-[15px] text-white/70 leading-relaxed rounded-2xl bg-white/[0.05] p-5">{t.chartMissingNote}</p>
+          )}
+        </Section>
+
+        {/* THẦN SỐ HỌC */}
+        <Section id="than-so-hoc" label="Phần 2" title="Thần số học" intro="Các con số sinh ra từ ngày sinh và tên đầy đủ của bạn, mô tả xu hướng tự nhiên, tài năng và bài học theo từng giai đoạn.">
+          <div className="space-y-6">
+            <div className="flex items-end gap-5">
+              <span className={`text-8xl sm:text-9xl leading-none text-[#FA5B13] ${heading}`}>{lp.value}</span>
+              <div className="pb-3">
+                <p className={eyebrow}>Số chủ đạo{lp.master ? ' · Số bậc thầy' : ''}</p>
+                <p className={`text-2xl sm:text-3xl text-white ${heading}`}>{lp.title}</p>
+                <p className="text-sm text-white/55 mt-1">{lp.info.keywords.join(' · ')}</p>
+              </div>
+            </div>
+            <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[64ch]">{lp.info.essence}</p>
+            <div className="grid sm:grid-cols-2 gap-8">
+              <div className="space-y-3"><Sub>Điểm mạnh</Sub><Bullets items={lp.info.strengths} /></div>
+              <div className="space-y-3"><Sub>Điều cần lưu ý</Sub><Bullets items={lp.info.challenges} tone="care" /></div>
+            </div>
+            <div className={`${soft} grid sm:grid-cols-2 gap-x-8 gap-y-6`}>
+              <Pair label="Sự nghiệp" text={lp.info.career} />
+              <Pair label="Tình yêu" text={lp.info.love} />
+              <Pair label="Gia đình" text={lp.info.family} />
+              <Pair label="Tiền bạc" text={lp.info.money} />
+              <Pair label="Sức khỏe" text={lp.info.health} />
+              <Pair label="Khi mất cân bằng" text={lp.info.shadow} />
+            </div>
+            <p className="text-base sm:text-lg text-white/85 leading-relaxed"><span className="text-[#FFA877] font-semibold">Điều bạn có thể chủ động: </span>{lp.info.growth}</p>
+            <p className={`text-xl sm:text-2xl text-white ${heading}`}>“{lp.info.mantra}”</p>
+          </div>
+
+          {!n.hasName && (
+            <p className="text-[15px] text-white/70 leading-relaxed rounded-2xl bg-white/[0.05] p-5">
+              Bạn chưa điền họ tên nên các chỉ số từ tên (số sứ mệnh, linh hồn, nhân cách, trưởng thành) chưa được tính. Báo cáo vẫn đầy đủ các phần theo ngày sinh.
+            </p>
+          )}
+
+          {n.core.length > 0 && (
+            <div className="space-y-4">
+              <Sub>Các con số cốt lõi</Sub>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {n.core.map((c) => (
+                  <div key={c.label} className={soft}>
+                    <div className="flex items-baseline gap-3">
+                      <span className={`text-4xl text-[#FA5B13] ${heading}`}>{c.value}</span>
+                      <span className="text-sm font-semibold text-white/70">{c.label}</span>
+                    </div>
+                    <p className="mt-2 text-[15px] text-white/85 leading-relaxed">{c.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Chu kỳ */}
+          <div className="space-y-5">
+            <Sub>Năm {n.cycles.year} của bạn</Sub>
+            <div className={`${soft} space-y-4`}>
+              <div className="flex items-baseline gap-3">
+                <span className={`text-5xl text-[#FA5B13] ${heading}`}>{n.cycles.personalYear.value}</span>
+                <span className={`text-xl sm:text-2xl text-white ${heading}`}>{n.cycles.personalYear.title}</span>
+              </div>
+              <p className="text-[15px] sm:text-base text-white/85 leading-relaxed">{n.cycles.personalYear.theme}</p>
+              <div className="grid sm:grid-cols-2 gap-6">
+                <div className="space-y-2"><Sub>Nên tập trung</Sub><Bullets items={n.cycles.personalYear.focus} /></div>
+                <div className="space-y-2"><Sub>Nên tránh</Sub><Bullets items={n.cycles.personalYear.avoid} tone="care" /></div>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-5 pt-1">
+                <Pair label="Tình cảm" text={n.cycles.personalYear.love} />
+                <Pair label="Tiền bạc" text={n.cycles.personalYear.money} />
+                <Pair label="Công việc" text={n.cycles.personalYear.career} />
+              </div>
+              <p className="text-sm text-white/65 leading-relaxed pt-1">Tháng {n.cycles.personalMonth.month} này: {n.cycles.personalMonth.text}</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <Sub>Bốn đỉnh cao cuộc đời</Sub>
+            <ol className="space-y-3">
+              {n.cycles.pinnacles.map((p) => (
+                <li key={p.index} className={`rounded-2xl p-5 ${p.current ? 'bg-[#FA5B13]/20' : 'bg-white/[0.04]'}`}>
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className={`text-3xl ${heading} ${p.current ? 'text-white' : 'text-[#FA5B13]'}`}>{p.value}</span>
+                    <span className="text-sm font-semibold text-white/80">Đỉnh cao {p.index} · {p.ages}</span>
+                    {p.current && <span className="rounded-full bg-[#FA5B13] px-2.5 py-0.5 text-xs font-bold">Đang ở đây</span>}
+                  </div>
+                  <p className="mt-2 text-[15px] text-white/85 leading-relaxed">{p.text}</p>
+                  <p className="mt-2 text-sm text-white/60 leading-relaxed">{p.challengeText}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Biểu đồ ngày sinh */}
+          <div className="space-y-5">
+            <Sub>Biểu đồ ngày sinh</Sub>
+            <div className="flex flex-col sm:flex-row gap-8 items-start">
+              <BirthGrid digits={n.chart.digits} />
+              <div className="space-y-4 flex-1">
+                {n.chart.planes.map((p) => (
+                  <Pair key={p.name} label={`${p.name} (${p.count} số)`} text={p.text} />
+                ))}
+              </div>
+            </div>
+            {(n.chart.arrowsPresent.length > 0 || n.chart.arrowsMissing.length > 0) && (
+              <div className={`${soft} space-y-4`}>
+                {n.chart.arrowsPresent.map((a) => <Pair key={a.name} label={a.name} text={a.text} />)}
+                {n.chart.arrowsMissing.map((a) => <Pair key={a.name} label={a.name} text={a.text} />)}
+              </div>
+            )}
+            <details className="group">
+              <summary className="cursor-pointer text-sm font-semibold text-[#FFA877] select-none">Xem ý nghĩa từng con số trong biểu đồ</summary>
+              <div className="mt-4 grid sm:grid-cols-2 gap-x-8 gap-y-5">
+                {n.chart.digits.map((d) => <Pair key={d.n} label={`Số ${d.n} · ${d.domain}`} text={d.text} />)}
+              </div>
+            </details>
+          </div>
+
+          {(n.karmic.debts.length > 0 || n.karmic.lessons.length > 0) && (
+            <div className="space-y-4">
+              <Sub>Bài học nghiệp</Sub>
+              <Bullets items={[...n.karmic.debts, ...n.karmic.lessons]} tone="care" />
+            </div>
           )}
         </Section>
 

@@ -63,6 +63,7 @@ export interface Report {
   lead: string;
   badges: Badge[];
   numerology: {
+    hasName: boolean;
     lifePath: { value: number; trail: number[]; master: boolean; title: string; info: (typeof LIFE_PATH)[number] };
     core: { label: string; value: number; text: string }[];
     cycles: {
@@ -277,7 +278,7 @@ export function buildReport(input: ReportInput, now: Date = new Date()): Report 
     };
   } else {
     chartMissingNote =
-      'Bạn chưa cung cấp giờ sinh nên phần lá số chi tiết (cung Mệnh, Thân, Cục, các chính tinh và đại vận) chưa thể lập. Khi biết giờ sinh, hãy liên hệ để được bổ sung.';
+      'Bạn chưa cung cấp giờ sinh nên phần lá số chi tiết (cung Mệnh, Thân, Cục, các chính tinh và đại vận) chưa thể lập. Khi biết giờ sinh, hãy liên hệ chaukhai9905@gmail.com để được bổ sung.';
   }
 
   // ---------- Bánh xe ----------
@@ -383,26 +384,27 @@ export function buildReport(input: ReportInput, now: Date = new Date()): Report 
 
   // ---------- Tổng quan ----------
   const badges: Badge[] = [
-    { label: 'Số chủ đạo', value: String(num.lifePath) },
     { label: 'Tuổi', value: tv.canChi },
     { label: 'Bản mệnh', value: `${tv.napAm.name} (${hanh})` },
     { label: 'Cung phi', value: `${bt.name} – ${bt.group}` },
+    { label: 'Số chủ đạo', value: String(num.lifePath) },
   ];
-  if (num.hasName) badges.splice(1, 0, { label: 'Số sứ mệnh', value: String(num.expression) });
+  if (num.hasName) badges.push({ label: 'Số sứ mệnh', value: String(num.expression) });
 
   const firstName = (input.name || '').trim().split(/\s+/).slice(-1)[0] || '';
   const lead =
-    `${firstName ? firstName + ', bạn' : 'Bạn'} mang năng lượng “${lpData.title}” của số chủ đạo ${num.lifePath}, ` +
-    `sinh năm ${tv.canChi} – nạp âm ${tv.napAm.name}. ` +
+    `${firstName ? firstName + ', bạn' : 'Bạn'} sinh năm ${tv.canChi} – nạp âm ${tv.napAm.name} (mệnh ${hanh}), ` +
+    `mang năng lượng “${lpData.title}” của số chủ đạo ${num.lifePath}. ` +
     `Đây là bản đồ hạnh phúc dành riêng cho bạn: nó chỉ ra xu hướng, thế mạnh và những gợi ý hành động – còn việc bạn chọn làm gì mới là điều tạo nên tương lai.`;
 
   return {
     name: input.name,
     code: input.code,
-    headline: `${lpData.title} · ${tv.napAm.name}`,
+    headline: `${tv.napAm.name} · ${lpData.title}`,
     lead,
     badges,
     numerology: {
+      hasName: num.hasName,
       lifePath: { value: num.lifePath, trail: num.lifePathTrail, master: [11, 22, 33].includes(num.lifePath), title: lpData.title, info: lpData },
       core,
       cycles: {

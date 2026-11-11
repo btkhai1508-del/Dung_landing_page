@@ -234,7 +234,6 @@ export const FamilyHappinessMap: React.FC = () => {
     const errs: Record<string, string> = {};
 
     if (step === 2) {
-      if (!formData.fullName.trim()) errs.fullName = 'Vui lòng nhập họ và tên đầy đủ';
       if (!formData.birthDate) errs.birthDate = 'Vui lòng chọn ngày tháng năm sinh';
       else if (birthDateError(formData.birthDate)) errs.birthDate = birthDateError(formData.birthDate)!;
       if (!formData.gender) errs.gender = 'Vui lòng chọn giới tính';
@@ -601,7 +600,7 @@ export const FamilyHappinessMap: React.FC = () => {
                 Bản đồ hạnh phúc của bạn đã sẵn sàng
               </h1>
               <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[56ch]">
-                Cảm ơn <strong className="font-semibold text-white">{formData.fullName}</strong> đã dành thời gian nhìn lại chính mình và gia đình.
+                Cảm ơn {formData.fullName.trim() ? <strong className="font-semibold text-white">{formData.fullName.trim()}</strong> : 'bạn'} đã dành thời gian nhìn lại chính mình và gia đình.
                 Toàn bộ quà tặng và báo cáo giải pháp chi tiết sẽ được gửi qua{' '}
                 <strong className="font-semibold text-[#FFA877]">Zalo / Email / Messenger</strong> trong vòng 24 giờ.
               </p>
@@ -612,7 +611,7 @@ export const FamilyHappinessMap: React.FC = () => {
               <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Thông tin của bạn</h2>
               <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5 text-sm sm:text-base">
                 {[
-                  ['Họ và tên', formData.fullName],
+                  ['Họ và tên', formData.fullName.trim() || 'Không ghi'],
                   ['Giới tính', formData.gender],
                   ['Ngày sinh', isoToVN(formData.birthDate)],
                   ['Giờ sinh', formData.birthTime || 'Không rõ'],
@@ -821,7 +820,7 @@ export const FamilyHappinessMap: React.FC = () => {
                       <span>Ai thực hiện khảo sát?</span>
                     </h3>
                     <p className="text-sm sm:text-base text-white/80 pl-5">
-                      [Tên pháp lý của cá nhân/doanh nghiệp: Dũng Gieo Hạt & Đội ngũ Chuyên gia Bản Đồ Hạnh Phúc], liên hệ tại [Email hoặc số điện thoại hỗ trợ: contact@dunggieohat.com / Zalo hỗ trợ].
+                      [Tên pháp lý của cá nhân/doanh nghiệp: Dũng Gieo Hạt & Đội ngũ Chuyên gia Bản Đồ Hạnh Phúc], liên hệ tại chaukhai9905@gmail.com.
                     </p>
                   </div>
 
@@ -887,7 +886,7 @@ export const FamilyHappinessMap: React.FC = () => {
                       Bạn có quyền yêu cầu xem, chỉnh sửa, rút lại sự đồng ý, hạn chế xử lý, phản đối xử lý hoặc yêu cầu xóa dữ liệu của mình theo quy định pháp luật.
                     </p>
                     <p className="text-xs sm:text-sm text-[#FFA877] font-medium pl-5 pt-1">
-                      Liên hệ thực hiện quyền: [contact@dunggieohat.com hoặc Zalo hỗ trợ].
+                      Liên hệ thực hiện quyền: chaukhai9905@gmail.com.
                     </p>
                   </div>
 
@@ -972,7 +971,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Họ tên */}
                   <div className="space-y-2">
                     <label className="block text-base sm:text-lg font-semibold text-white">
-                      1. Họ và tên đầy đủ <span className="text-[#FA5B13]">*</span>
+                      1. Họ và tên đầy đủ <span className="text-white/55 font-normal text-base">(không bắt buộc)</span>
                     </label>
                     <input
                       type="text"
@@ -983,7 +982,7 @@ export const FamilyHappinessMap: React.FC = () => {
                     />
                     <div className="text-xs sm:text-sm text-white/90 italic font-normal leading-relaxed pl-3 border-l-2 border-[#FFA877] py-1 bg-white/5 rounded-r-lg">
                       <span className="text-[#FFA877] font-semibold not-italic">* Lưu ý: </span>
-                      Nếu bạn muốn tính thêm các chỉ số như số sứ mệnh, linh hồn, nhân cách, biểu đạt thì tự nguyện điền họ tên khai sinh đầy đủ.
+                      Nếu bạn muốn tính thêm các chỉ số như số sứ mệnh, linh hồn, nhân cách, biểu đạt thì tự nguyện điền họ tên khai sinh đầy đủ, hoặc bỏ trống không ghi. Nếu tên không đúng thì bản báo cáo sẽ không chính xác.
                     </div>
                     {errors.fullName && <p className="text-sm text-red-300 font-medium">{errors.fullName}</p>}
                   </div>
