@@ -1,0 +1,6 @@
+{
+  "name": "Đón Nhận Phúc Lộc - Bùi Trung Zũng",
+  "description": "Landing page hướng dẫn phương pháp thu hút và đón nhận phúc lộc quanh bạn - Người Gieo Hạt Tư Duy Bùi Trung Zũng.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

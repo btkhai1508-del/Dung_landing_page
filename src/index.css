@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+    --font-serif: 'Playfair Display', Georgia, serif;
+    --font-script: 'Dancing Script', cursive;
+  }
+}
+
+.font-sans {
+  font-family: var(--font-sans);
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-script {
+  font-family: var(--font-script);
+}
+
+/* Custom brush banner texture and gradients */
+.brush-banner {
+  background: linear-gradient(135deg, #a81919 0%, #c41e3a 50%, #8b1414 100%);
+  position: relative;
+  box-shadow: 0 4px 15px rgba(185, 28, 28, 0.35);
+  clip-path: polygon(
+    2% 0%, 98% 0%, 
+    100% 25%, 98% 50%, 100% 75%, 98% 100%, 
+    2% 100%, 0% 75%, 2% 50%, 0% 25%
+  );
+}
+
+.brush-banner-sm {
+  background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #991b1b 100%);
+  position: relative;
+  box-shadow: 0 4px 15px rgba(185, 28, 28, 0.3);
+  clip-path: polygon(
+    1.5% 0%, 98.5% 0%, 
+    100% 30%, 98.5% 60%, 100% 100%, 
+    1.5% 100%, 0% 60%, 1.5% 30%
+  );
+}
+
+/* Shimmer animation */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 3s infinite ease-in-out;
+}
+
+/* Gentle water ripple */
+@keyframes ripple {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+.animate-ripple {
+  animation: ripple 2.5s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+/* Glow pulse */
+@keyframes gold-pulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(234, 179, 8, 0.35), 0 4px 12px rgba(0,0,0,0.08); }
+  50% { box-shadow: 0 0 25px rgba(234, 179, 8, 0.65), 0 8px 24px rgba(0,0,0,0.12); }
+}
+
+.animate-gold-pulse {
+  animation: gold-pulse 3s infinite ease-in-out;
+}
