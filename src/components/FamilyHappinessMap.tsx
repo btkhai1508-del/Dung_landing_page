@@ -900,49 +900,16 @@ export const FamilyHappinessMap: React.FC = () => {
                   <div className="space-y-2 pt-2 border-t border-white/10">
                     <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                       <span className="text-[#FA5B13] font-bold">4.</span>
-                      <span>AI có tham gia không?</span>
-                    </h3>
-                    <p className="text-sm sm:text-base text-white/80 pl-5">
-                      [Hệ thống kết hợp thuật toán AI hỗ trợ phân tích năng lượng ngày sinh và dữ liệu khảo sát để gợi ý giải pháp cải thiện cuộc sống. Dữ liệu của bạn được bảo mật tuyệt đối, không chia sẻ công khai và không dùng để huấn luyện mô hình bên ngoài].
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 pt-2 border-t border-white/10">
-                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                      <span className="text-[#FA5B13] font-bold">5.</span>
-                      <span>Ai có thể tiếp cận dữ liệu?</span>
-                    </h3>
-                    <p className="text-sm sm:text-base text-white/80 pl-5">
-                      [Những bộ phận phân tích nội bộ, nhà cung cấp lưu trữ an toàn và chuyên gia phụ trách báo cáo]. Chúng tôi cam kết không bán hoặc chia sẻ thông tin của bạn cho bên thứ ba. Nếu có xử lý ở nước ngoài, chúng tôi sẽ thông tin về hoạt động này trong chính sách đầy đủ.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 pt-2 border-t border-white/10">
-                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                      <span className="text-[#FA5B13] font-bold">6.</span>
-                      <span>Thông tin được lưu trong bao lâu?</span>
-                    </h3>
-                    <p className="text-sm sm:text-base text-white/80 pl-5">
-                      [Thời hạn thực tế cần thiết để lập và gửi bản đồ giải pháp cho bạn, thời điểm tính và ngoại lệ lưu giữ theo quy định pháp luật hoặc khi nhận được yêu cầu xóa từ bạn].
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 pt-2 border-t border-white/10">
-                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                      <span className="text-[#FA5B13] font-bold">7.</span>
                       <span>Bạn có những quyền gì?</span>
                     </h3>
                     <p className="text-sm sm:text-base text-white/80 pl-5">
-                      Bạn có quyền yêu cầu xem, chỉnh sửa, rút lại sự đồng ý, hạn chế xử lý, phản đối xử lý hoặc yêu cầu xóa dữ liệu của mình theo quy định pháp luật.
+                      Bạn có quyền yêu cầu xem, chỉnh sửa, rút lại sự đồng ý hoặc yêu cầu xóa dữ liệu của mình theo quy định pháp luật.
                     </p>
                     <p className="text-xs sm:text-sm text-[#FFA877] font-medium pl-5 pt-1">
                       Liên hệ thực hiện quyền: chaukhai9905@gmail.com.
                     </p>
                   </div>
 
-                  <div className="pt-2 text-xs sm:text-sm text-white/70 italic pl-5">
-                    Bạn có thể đọc toàn bộ Chính sách bảo vệ dữ liệu cá nhân trước khi quyết định tham gia.
-                  </div>
                 </div>
 
                 {/* Checkbox Xin Sự Đồng Ý */}
