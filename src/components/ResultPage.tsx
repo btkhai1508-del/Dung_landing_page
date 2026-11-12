@@ -35,9 +35,9 @@ function parseRelativesText(text: string): RelativeInput[] {
   return out;
 }
 
-async function fetchRecord(phone: string, code: string): Promise<{ record?: LookupRecord; error?: LookupError }> {
+async function fetchRecord(phone: string): Promise<{ record?: LookupRecord; error?: LookupError }> {
   try {
-    const url = `${GOOGLE_SCRIPT_URL}?action=result&phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}`;
+    const url = `${GOOGLE_SCRIPT_URL}?action=result&phone=${encodeURIComponent(phone)}`;
     const res = await fetch(url, { method: 'GET' });
     const data = await res.json();
     if (data && data.ok && data.record) return { record: data.record as LookupRecord };
@@ -75,8 +75,8 @@ function toInput(r: LookupRecord): ReportInput {
 }
 
 const ERROR_TEXT: Record<LookupError, string> = {
-  invalid: 'Vui lòng nhập đúng số điện thoại và mã tra cứu gồm 7 chữ số.',
-  notfound: 'Không tìm thấy kết quả khớp với số điện thoại và mã này. Hãy kiểm tra lại mã trong email của bạn.',
+  invalid: 'Vui lòng nhập đúng số điện thoại bạn đã dùng khi làm khảo sát.',
+  notfound: 'Chưa tìm thấy kết quả của số điện thoại này. Hãy kiểm tra lại số, hoặc làm khảo sát Bản Đồ Hạnh Phúc trước.',
   locked: 'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau khoảng 1 giờ.',
   network: 'Chưa kết nối được tới hệ thống. Vui lòng kiểm tra mạng và thử lại.',
   format: 'Dữ liệu của bạn chưa đủ để lập báo cáo (thiếu ngày sinh). Vui lòng liên hệ ban hỗ trợ.',
@@ -231,20 +231,9 @@ const TuViChart: React.FC<{ report: Report }> = ({ report }) => {
 // ---------- Trang chính ----------
 export const ResultPage: React.FC = () => {
   const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<LookupError | null>(null);
   const [report, setReport] = useState<Report | null>(null);
-
-  useEffect(() => {
-    try {
-      const q = new URLSearchParams(window.location.search);
-      const c = (q.get('code') || '').replace(/\D/g, '').slice(0, 7);
-      if (c) setCode(c);
-    } catch {
-      /* không có query */
-    }
-  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -253,14 +242,13 @@ export const ResultPage: React.FC = () => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const p = phone.replace(/\D/g, '');
-    const c = code.replace(/\D/g, '');
-    if (p.length < 9 || c.length < 7) {
+    if (p.length < 9) {
       setError('invalid');
       return;
     }
     setError(null);
     setLoading(true);
-    const res = await fetchRecord(p, c);
+    const res = await fetchRecord(p);
     setLoading(false);
     if (!res.record) {
       setError(res.error || 'notfound');
@@ -293,7 +281,7 @@ export const ResultPage: React.FC = () => {
             <p className={eyebrow}>Dũng Gieo Hạt</p>
             <h1 className={`text-4xl sm:text-5xl text-white leading-[1.15] ${heading}`}>Kết quả của bạn</h1>
             <p className="text-base text-white/70 leading-relaxed">
-              Nhập số điện thoại bạn đã đăng ký và mã tra cứu trong email để mở bản đồ hạnh phúc cá nhân.
+              Nhập số điện thoại bạn đã dùng khi làm khảo sát để mở bản đồ hạnh phúc cá nhân của bạn.
             </p>
           </header>
           <form onSubmit={submit} className="space-y-5" noValidate>
@@ -302,11 +290,6 @@ export const ResultPage: React.FC = () => {
               <input id="rp-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="09xx xxx xxx" value={phone}
                 onChange={(e) => setPhone(e.target.value)} className={inputCls} />
             </div>
-            <div className="space-y-2">
-              <label htmlFor="rp-code" className="block text-sm font-semibold text-white/80">Mã tra cứu (7 chữ số)</label>
-              <input id="rp-code" type="text" inputMode="numeric" autoComplete="off" placeholder="1011001" maxLength={7} value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} className={`${inputCls} tabular-nums tracking-[0.3em]`} />
-            </div>
             {error && <p role="alert" className="text-sm text-red-300 font-medium leading-relaxed">{ERROR_TEXT[error]}</p>}
             <button type="submit" disabled={loading}
               className="w-full py-4 rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] disabled:opacity-60 text-white text-base font-bold tracking-wide transition cursor-pointer">
@@ -314,7 +297,7 @@ export const ResultPage: React.FC = () => {
             </button>
           </form>
           <p className="text-center text-xs text-white/45 leading-relaxed">
-            Mã chỉ mở được báo cáo khi đi cùng đúng số điện thoại. Bạn chưa nhận được email? Mã được gửi sau khoảng 30 phút kể từ lúc hoàn thành khảo sát.
+            Báo cáo chỉ mở được bằng đúng số điện thoại bạn đã đăng ký. Chưa làm khảo sát? Hãy vào trang Bản Đồ Hạnh Phúc để bắt đầu.
           </p>
         </div>
       </main>
@@ -322,6 +305,24 @@ export const ResultPage: React.FC = () => {
   }
 
   return shell(<ReportView report={report} onBack={() => setReport(null)} />);
+};
+
+// ---------- Chip mức điểm & loại liên kết (Bánh xe cuộc đời) ----------
+const LEVEL_CHIP: Record<string, string> = {
+  alarm: 'bg-red-500/25 text-red-100',
+  low: 'bg-[#FA5B13]/25 text-[#FFB48A]',
+  mid: 'bg-white/10 text-white/80',
+  good: 'bg-emerald-500/20 text-emerald-100',
+  full: 'bg-[#FFD27A]/25 text-[#FFE3AE]',
+};
+const LevelChip: React.FC<{ tone: string; label: string }> = ({ tone, label }) => (
+  <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${LEVEL_CHIP[tone] || LEVEL_CHIP.mid}`}>{label}</span>
+);
+const LINK_TONE: Record<string, { label: string; chip: string }> = {
+  imbalance: { label: 'Có thể đang đánh đổi', chip: 'bg-red-500/25 text-red-100' },
+  bothLow: { label: 'Cùng thấp, kéo nhau xuống', chip: 'bg-[#FA5B13]/25 text-[#FFB48A]' },
+  support: { label: 'Điểm tựa để nâng', chip: 'bg-emerald-500/20 text-emerald-100' },
+  bothHigh: { label: 'Cùng mạnh, nâng đỡ nhau', chip: 'bg-[#FFD27A]/25 text-[#FFE3AE]' },
 };
 
 // ---------- Báo cáo ----------
@@ -375,7 +376,7 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
               In / lưu thành PDF
             </button>
             <button onClick={onBack} className="rounded-full px-5 py-2.5 text-sm text-white/60 hover:text-white transition cursor-pointer">
-              Tra cứu mã khác
+              Tra cứu số khác
             </button>
           </div>
         </section>
@@ -648,15 +649,21 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
         </Section>
 
         {/* BÁNH XE */}
-        <Section id="banh-xe" label="Phần 3" title="Bánh xe hạnh phúc" intro={w.balanceText + ' ' + w.spreadText}>
+        <Section id="banh-xe" label="Phần 3" title="Bánh xe cuộc đời (Wheel of Life)" intro={w.howToRead[0]}>
+          <div className="space-y-3">
+            {w.howToRead.slice(1).map((t) => (
+              <p key={t} className="text-[15px] sm:text-base text-white/75 leading-relaxed max-w-[64ch]">{t}</p>
+            ))}
+          </div>
+
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-10">
             <div className="w-full md:w-[320px] shrink-0"><Radar items={w.scores.map((s) => ({ label: s.label, score: s.score }))} /></div>
-            <ul className="w-full space-y-3.5">
+            <ul className="w-full space-y-3">
               {w.scores.map((s) => (
                 <li key={s.key} className="flex items-center justify-between gap-3 text-sm sm:text-base">
-                  <span className="text-white/90 truncate">{s.label}</span>
+                  <span className="text-white/90 min-w-0">{s.label}</span>
                   <div className="flex items-center gap-3 shrink-0">
-                    <div className="w-24 sm:w-28 bg-white/15 h-1.5 rounded-full overflow-hidden"><div className="bg-[#FA5B13] h-full rounded-full" style={{ width: `${s.score * 10}%` }} /></div>
+                    <LevelChip tone={s.levelTone} label={s.level} />
                     <span className="font-semibold w-10 text-right tabular-nums">{s.score}/10</span>
                   </div>
                 </li>
@@ -666,9 +673,74 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
               </li>
             </ul>
           </div>
-          <p className="text-[15px] sm:text-base text-white/85 leading-relaxed">
-            Điểm cao nhất của bạn là <strong className="text-white">{w.strongest.label}</strong> ({w.strongest.score}/10) và điểm cần chăm sóc nhất là <strong className="text-white">{w.weakest.label}</strong> ({w.weakest.score}/10).
-          </p>
+
+          {/* Hình dạng bánh xe */}
+          <div className="space-y-3">
+            <Sub>Hình dạng bánh xe của bạn</Sub>
+            <p className={`text-2xl text-white ${heading}`}>{w.shape.label}</p>
+            <p className="text-[15px] sm:text-base text-white/85 leading-relaxed max-w-[64ch]">{w.shape.text}</p>
+            <p className="text-sm text-white/60 leading-relaxed">
+              Cao nhất: {w.strongest.label} ({w.strongest.score}/10) · Thấp nhất: {w.weakest.label} ({w.weakest.score}/10) · Chênh lệch {w.shape.spread} điểm. {w.balanceText}
+            </p>
+          </div>
+
+          {/* Ba trụ cột */}
+          <div className="space-y-4">
+            <Sub>Ba trụ cột của cuộc sống</Sub>
+            <ul className="space-y-3">
+              {w.groups.map((g) => (
+                <li key={g.key} className="flex items-center justify-between gap-3 text-sm sm:text-base">
+                  <span className="text-white/90">{g.label}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="w-24 sm:w-40 bg-white/15 h-1.5 rounded-full overflow-hidden"><div className="bg-[#FA5B13] h-full rounded-full" style={{ width: `${g.avg * 10}%` }} /></div>
+                    <span className="font-semibold w-10 text-right tabular-nums">{g.avg}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[15px] sm:text-base text-white/85 leading-relaxed max-w-[64ch]">{w.groupText}</p>
+          </div>
+
+          {/* Nan hoa then chốt */}
+          <div className={`${soft} space-y-3`}>
+            <p className={eyebrow}>Nan hoa then chốt</p>
+            <p className={`text-2xl sm:text-3xl text-white ${heading}`}>{w.keystone.label} <span className="text-[#FA5B13]">{w.keystone.score}/10</span></p>
+            <p className="text-[15px] sm:text-base text-white/85 leading-relaxed">{w.keystone.text}</p>
+            {w.keystone.note && <p className="text-[15px] sm:text-base text-white/85 leading-relaxed"><span className="text-[#FFA877] font-semibold">Với lĩnh vực bạn chọn: </span>{w.keystone.note}</p>}
+          </div>
+
+          {/* Liên kết giữa các lĩnh vực */}
+          <div className="space-y-5">
+            <Sub>Các lĩnh vực đang tác động lẫn nhau</Sub>
+            <p className="text-[15px] text-white/70 leading-relaxed max-w-[64ch]">
+              Điểm của từng lĩnh vực không đứng riêng: chúng kéo nhau lên hoặc xuống. Đây là những mối liên kết nổi bật nhất trong bánh xe của bạn.
+            </p>
+            <ul className="space-y-4">
+              {w.links.map((l) => (
+                <li key={l.title} className="rounded-2xl bg-white/[0.04] p-5 space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="text-base font-semibold text-white">{l.title}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${LINK_TONE[l.tone]?.chip || ''}`}>{LINK_TONE[l.tone]?.label}</span>
+                  </div>
+                  <p className="text-[15px] text-white/85 leading-relaxed">{l.text}</p>
+                  {l.action && <p className="text-[15px] text-white/85 leading-relaxed"><span className="text-[#FFA877] font-semibold">Gợi ý: </span>{l.action}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {w.cycles.length > 0 && (
+            <div className="space-y-4">
+              <Sub>Vòng xoáy đang diễn ra</Sub>
+              {w.cycles.map((c) => (
+                <div key={c.name} className="space-y-1.5">
+                  <p className="text-sm font-semibold text-[#FFA877]">{c.name} · {c.state === 'down' ? 'đang đi xuống' : 'đang đi lên'}</p>
+                  <p className="text-[15px] text-white/85 leading-relaxed">{c.text}</p>
+                  <p className="text-[15px] text-white/85 leading-relaxed">{c.state === 'down' ? <><span className="font-semibold text-white">Cách phá vòng: </span>{c.advice}</> : c.advice}</p>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className={`${soft} space-y-4`}>
             <p className={eyebrow}>Lĩnh vực bạn chọn ưu tiên</p>
@@ -678,14 +750,28 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
             {w.desire && <p className={`text-lg text-white/90 ${heading}`}>“{w.desire}”</p>}
           </div>
 
-          <div className="space-y-6">
-            <Sub>Phân tích từng lĩnh vực</Sub>
+          <div className="space-y-8">
+            <Sub>Phân tích từng lĩnh vực trong mối liên hệ với các lĩnh vực khác</Sub>
             {w.scores.map((s) => (
-              <div key={s.key} className="space-y-2">
-                <p className="text-base font-semibold text-white">{s.label} <span className="text-[#FA5B13]">· {s.score}/10</span></p>
+              <div key={s.key} className="space-y-2.5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <p className="text-base font-semibold text-white">{s.label} <span className="text-[#FA5B13]">· {s.score}/10</span></p>
+                  <LevelChip tone={s.levelTone} label={s.level} />
+                </div>
+                <p className="text-[15px] text-white/85 leading-relaxed">{s.lead}</p>
                 <p className="text-[15px] text-white/85 leading-relaxed">{s.read}</p>
+                {s.related.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {s.related.map((r) => (
+                      <li key={r.label} className="text-[15px] text-white/80 leading-relaxed">
+                        <span className="font-semibold text-[#FFA877]">Liên kết với {r.label} ({r.score}/10): </span>{r.text}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <Bullets items={s.actions} />
                 <p className="text-sm text-white/60 leading-relaxed">{s.hanhTip}</p>
+                <p className={`text-[15px] text-white/70 ${heading}`}>Tự hỏi: {s.question}</p>
               </div>
             ))}
           </div>
@@ -707,6 +793,18 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
               <Bullets items={w.support.map((s) => s.tip)} />
             </div>
           )}
+
+          <div className="space-y-4">
+            <Sub>Sau khi xem bánh xe của mình</Sub>
+            <ol className="space-y-3">
+              {w.nextSteps.map((t, i) => (
+                <li key={t} className="flex gap-3 text-[15px] sm:text-base text-white/85 leading-relaxed">
+                  <span className={`shrink-0 text-xl leading-none text-[#FA5B13] ${heading}`}>{i + 1}</span>
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
         </Section>
 
         {/* GIA ĐÌNH */}

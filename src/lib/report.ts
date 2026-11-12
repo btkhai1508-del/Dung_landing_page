@@ -18,6 +18,8 @@ import {
   AREAS, AREA_INFO, HANH_AREA_TIP, LP_CHANGE_STYLE, OBSTACLE_TIP, SUPPORT_TIP, FAMILY_TIME_TEXT,
   BALANCE_TEXT, PRIORITY_PLAN, AreaKey,
 } from '../data/lifeWheel';
+import { analyzeWheel, Scores } from './wheelAnalysis';
+import { HOW_TO_READ, AREA_QUESTIONS, NEXT_STEPS } from '../data/wheelLinks';
 import { detectRole, ROLE_LABEL, ROLE_TIP, CHI_REL, HANH_REL, OVERALL } from '../data/familyData';
 
 // ============ Đầu vào ============
@@ -106,11 +108,19 @@ export interface Report {
     chartMissingNote: string | null;
   };
   wheel: {
-    scores: { key: string; label: string; score: number; read: string; actions: string[]; hanhTip: string }[];
+    scores: { key: string; label: string; score: number; read: string; actions: string[]; hanhTip: string; level: string; levelTone: string; lead: string; question: string; related: { label: string; score: number; tone: string; text: string }[] }[];
     avg: number;
     spread: number;
     balanceText: string;
     spreadText: string;
+    howToRead: string[];
+    shape: { label: string; text: string; spread: number; lowCount: number };
+    groups: { key: string; label: string; avg: number }[];
+    groupText: string;
+    keystone: { key: string; label: string; score: number; text: string; note: string; affected: { label: string; score: number }[] };
+    links: { tone: string; title: string; text: string; action?: string }[];
+    cycles: { name: string; state: 'down' | 'up'; text: string; weakest: { label: string; score: number }; advice: string }[];
+    nextSteps: string[];
     strongest: { label: string; score: number };
     weakest: { label: string; score: number };
     priority: { key: string; label: string; score: number; why: string; weeks: string[]; metric: string; lpStyle: string };
@@ -298,6 +308,18 @@ export function buildReport(input: ReportInput, now: Date = new Date()): Report 
   const lpKey = num.lifePath;
   const priPlan = PRIORITY_PLAN[priArea.key];
 
+  // Phân tích theo mức điểm + liên kết giữa các lĩnh vực
+  const scoreMap = Object.fromEntries(scoreList.map((x) => [x.key, x.score])) as Scores;
+  const wa = analyzeWheel(scoreMap, priArea.key);
+  const scoresFull = scoreList.map((x) => ({
+    ...x,
+    level: wa.levels[x.key].label,
+    levelTone: wa.levels[x.key].tone,
+    lead: wa.levels[x.key].lead,
+    question: AREA_QUESTIONS[x.key as AreaKey][0],
+    related: wa.related[x.key] || [],
+  }));
+
   const obstacles = (input.obstacles || [])
     .map((o) => {
       const name = o.replace(/^Khác:\s*/i, '');
@@ -445,11 +467,19 @@ export function buildReport(input: ReportInput, now: Date = new Date()): Report 
       chartMissingNote,
     },
     wheel: {
-      scores: scoreList,
+      scores: scoresFull,
       avg,
       spread,
       balanceText: avg < 5 ? BALANCE_TEXT.avgLow : avg < 7.5 ? BALANCE_TEXT.avgMid : BALANCE_TEXT.avgHigh,
       spreadText: spread >= 5 ? BALANCE_TEXT.spreadHigh : BALANCE_TEXT.spreadLow,
+      howToRead: HOW_TO_READ,
+      shape: wa.shape,
+      groups: wa.groups,
+      groupText: wa.groupText,
+      keystone: wa.keystone,
+      links: wa.links,
+      cycles: wa.cycles,
+      nextSteps: NEXT_STEPS,
       strongest: { label: strongest.label, score: strongest.score },
       weakest: { label: weakest.label, score: weakest.score },
       priority: {

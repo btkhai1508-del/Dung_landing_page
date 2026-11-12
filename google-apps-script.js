@@ -6,7 +6,8 @@
  * 2) Tab "Quà Tặng Tầng 1": cột A là Mã DDMMXXX (XXX = STT trong ngày, 001–999).
  * 3) Sau khi người dùng hoàn thành khảo sát /bando, hệ thống gửi 1 email kèm mã
  *    tra cứu SAU 30 PHÚT (hàng đợi + trigger mỗi 5 phút).
- * 4) Trang /ketqua gọi doGet?action=result&phone=...&code=... để lấy dữ liệu người dùng.
+ * 4) Trang /ketqua gọi doGet?action=result&phone=... (chỉ cần số điện thoại) để lấy dữ liệu người dùng.
+ *    Mỗi số điện thoại chỉ làm khảo sát /bando một lần: doGet?action=checkphone&phone=... báo số đã tồn tại.
  *
  * SAU KHI DÁN CODE NÀY:
  *   a. Chạy hàm setupTriggers() MỘT LẦN trong trình soạn thảo (cấp quyền khi được hỏi).
@@ -33,7 +34,8 @@ function jsonOut(obj) {
 // ----------------------------------------------------------------------------
 function doGet(e) {
   const p = (e && e.parameter) || {};
-  if (p.action === "result") return jsonOut(lookupResult(p.phone, p.code));
+  if (p.action === "result") return jsonOut(lookupResult(p.phone));
+  if (p.action === "checkphone") return jsonOut(checkPhone(p.phone));
   return jsonOut({ status: "ready", message: "Webhook Dũng Gieo Hạt đang hoạt động bình thường!" });
 }
 
@@ -68,6 +70,7 @@ function doPost(e) {
 
     const timestamp = new Date().toLocaleString("vi-VN", { timeZone: TZ });
     let duplicate = false;
+    let duplicatePhone = false;
     let code = "";
 
     const lock = LockService.getScriptLock();
@@ -85,17 +88,22 @@ function doPost(e) {
         cache.put(dupKey, "1", 60);
         const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
         const sheet = getTargetSheet(ss, sheetName);
-        let row = Object.assign({ "Thời Gian": timestamp }, fields);
-        if (isBando) {
-          ensureFirstColumn(sheet, CODE_HEADER);
-          code = nextDailyCode(sheet.getName());
-          row = Object.assign({ [CODE_HEADER]: code }, row);
-        }
-        writeRowByHeaders(sheet, row);
+        if (isBando && customerPhone && findPhoneRow(sheet, customerPhone) > 0) {
+          // Mỗi số điện thoại chỉ làm khảo sát một lần: không ghi thêm, không gửi email
+          duplicatePhone = true;
+        } else {
+          let row = Object.assign({ "Thời Gian": timestamp }, fields);
+          if (isBando) {
+            ensureFirstColumn(sheet, CODE_HEADER);
+            code = nextDailyCode(sheet.getName());
+            row = Object.assign({ [CODE_HEADER]: code }, row);
+          }
+          writeRowByHeaders(sheet, row);
 
-        // Hẹn gửi email kèm mã sau MAIL_DELAY_MINUTES phút (chỉ với khảo sát có mã)
-        if (isBando && code && customerEmail && customerEmail.indexOf("@") !== -1) {
-          scheduleResultEmail(code, customerName, customerEmail, customerPhone);
+          // Hẹn gửi email sau MAIL_DELAY_MINUTES phút (chỉ với khảo sát có mã)
+          if (isBando && code && customerEmail && customerEmail.indexOf("@") !== -1) {
+            scheduleResultEmail(code, customerName, customerEmail, customerPhone);
+          }
         }
       }
     } catch (sheetError) {
@@ -108,6 +116,7 @@ function doPost(e) {
       status: "success",
       sheet: sheetName || "(tab đầu tiên)",
       duplicate: duplicate,
+      duplicatePhone: duplicatePhone,
       code: code,
       form: formType,
       saved: { name: customerName, phone: customerPhone, email: customerEmail },
@@ -285,36 +294,53 @@ function cellText(v) {
   return String(v === null || v === undefined ? "" : v).trim();
 }
 
-function lookupResult(phoneRaw, codeRaw) {
+// Tìm dòng (số thứ tự hàng, bắt đầu từ 2) CUỐI CÙNG có số điện thoại trùng; -1 nếu không có.
+function findPhoneRow(sheet, phoneRaw) {
   const phone = normalizePhone(phoneRaw);
-  const code = normalizeCode(codeRaw);
-  if (phone.length < 9 || code.length < 7) return { ok: false, error: "invalid" };
+  if (!phone || sheet.getLastRow() < 2) return -1;
+  const values = sheet.getDataRange().getValues();
+  const c = values[0].map((h) => normalizeName(h)).indexOf(normalizeName("SĐT"));
+  if (c < 0) return -1;
+  for (let r = values.length - 1; r >= 1; r--) {
+    if (normalizePhone(values[r][c]) === phone) return r + 1;
+  }
+  return -1;
+}
 
-  // Giới hạn số lần thử sai: tối đa 8 lần / số điện thoại / giờ
+function getBandoSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const wanted = normalizeName(BANDO_SHEET);
+  return ss.getSheets().find((s) => normalizeName(s.getName()) === wanted) || null;
+}
+
+// Form khảo sát hỏi trước: số điện thoại này đã làm khảo sát chưa?
+function checkPhone(phoneRaw) {
+  const phone = normalizePhone(phoneRaw);
+  if (phone.length < 9) return { ok: false, error: "invalid" };
+  const sheet = getBandoSheet();
+  return { ok: true, exists: !!sheet && findPhoneRow(sheet, phone) > 0 };
+}
+
+// Tra cứu kết quả: chỉ cần số điện thoại.
+function lookupResult(phoneRaw) {
+  const phone = normalizePhone(phoneRaw);
+  if (phone.length < 9) return { ok: false, error: "invalid" };
+
+  // Hạn chế dò số: tối đa 8 lần sai / số điện thoại / giờ và 300 lần sai toàn hệ thống / giờ
   const cache = CacheService.getScriptCache();
   const tryKey = "try_" + phone;
   const tries = Number(cache.get(tryKey) || "0");
-  if (tries >= 8) return { ok: false, error: "locked" };
+  const globalTries = Number(cache.get("try_global") || "0");
+  if (tries >= 8 || globalTries >= 300) return { ok: false, error: "locked" };
 
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const wanted = normalizeName(BANDO_SHEET);
-  const sheet = ss.getSheets().find((s) => normalizeName(s.getName()) === wanted);
-  if (!sheet || sheet.getLastRow() < 2) return failLookup(cache, tryKey, tries);
+  const sheet = getBandoSheet();
+  const rowNo = sheet ? findPhoneRow(sheet, phone) : -1;
+  if (rowNo < 0) return failLookup(cache, tryKey, tries, globalTries);
 
   const values = sheet.getDataRange().getValues();
   const headers = values[0].map((h) => normalizeName(h));
   const col = (name) => headers.indexOf(normalizeName(name));
-  const cCode = col(CODE_HEADER);
-  const cPhone = col("SĐT");
-  if (cCode < 0 || cPhone < 0) return failLookup(cache, tryKey, tries);
-
-  let rowIdx = -1;
-  for (let r = values.length - 1; r >= 1; r--) {
-    if (normalizeCode(values[r][cCode]) === code && normalizePhone(values[r][cPhone]) === phone) { rowIdx = r; break; }
-  }
-  if (rowIdx < 0) return failLookup(cache, tryKey, tries);
-
-  const row = values[rowIdx];
+  const row = values[rowNo - 1];
   const val = (name) => { const i = col(name); return i < 0 ? "" : cellText(row[i]); };
   let extra = {};
   try { extra = JSON.parse(val("Dữ liệu báo cáo") || "{}"); } catch (err) {}
@@ -324,7 +350,7 @@ function lookupResult(phoneRaw, codeRaw) {
   return {
     ok: true,
     record: {
-      code: code,
+      code: normalizeCode(val(CODE_HEADER)),
       name: val("Họ Và Tên"),
       birthDate: val("Ngày sinh"),
       birthTime: val("Giờ sinh"),
@@ -348,8 +374,9 @@ function lookupResult(phoneRaw, codeRaw) {
   };
 }
 function splitList(s) { return String(s || "").split(/,\s*/).map((x) => x.trim()).filter(Boolean); }
-function failLookup(cache, tryKey, tries) {
+function failLookup(cache, tryKey, tries, globalTries) {
   cache.put(tryKey, String(tries + 1), 3600);
+  cache.put("try_global", String((globalTries || 0) + 1), 3600);
   return { ok: false, error: "notfound" };
 }
 
@@ -448,7 +475,7 @@ function sendResultEmail(job) {
   const code = job.code;
   const phoneHint = maskPhone(job.phone);
   const hasUrl = !!RESULT_PAGE_URL;
-  const subject = "Mã tra cứu Bản Đồ Hạnh Phúc của bạn: " + code;
+  const subject = "Bản đồ hạnh phúc của bạn đã sẵn sàng";
 
   const INK = "#1F1A17", MUTE = "#6B625B", PAPER = "#F4EFE8", CARD = "#FFFDF9", ACCENT = "#E8590C", DARK = "#16130F", LINE = "#E9E1D6";
   const SERIF = "Georgia, 'Times New Roman', serif";
@@ -469,7 +496,7 @@ function sendResultEmail(job) {
 
   const button = hasUrl
     ? '<table role="presentation" cellspacing="0" cellpadding="0" style="margin:6px 0 4px 0;"><tr><td style="border-radius:999px;background:' + ACCENT + ';">' +
-      '<a href="' + escapeHtml(RESULT_PAGE_URL + (RESULT_PAGE_URL.indexOf("?") >= 0 ? "&" : "?") + "code=" + code) + '" target="_blank" style="display:inline-block;padding:15px 30px;font:700 15px/20px ' + SANS + ';color:#ffffff;text-decoration:none;letter-spacing:.3px;">Xem kết quả của tôi &rarr;</a>' +
+      '<a href="' + escapeHtml(RESULT_PAGE_URL) + '" target="_blank" style="display:inline-block;padding:15px 30px;font:700 15px/20px ' + SANS + ';color:#ffffff;text-decoration:none;letter-spacing:.3px;">Xem kết quả của tôi &rarr;</a>' +
       '</td></tr></table>'
     : "";
 
@@ -495,15 +522,15 @@ function sendResultEmail(job) {
   '<div style="font:600 11px/16px ' + SANS + ';color:' + ACCENT + ';letter-spacing:2.4px;text-transform:uppercase;">Bản đồ hạnh phúc gia đình</div>' +
   '<h1 style="margin:12px 0 14px 0;font:400 30px/38px ' + SERIF + ';color:' + INK + ';">Cảm ơn ' + escapeHtml(name) + ', bản đồ của bạn đã được lập.</h1>' +
   '<p style="margin:0;font:400 15px/26px ' + SANS + ';color:' + MUTE + ';">Bạn vừa dành thời gian nhìn lại chính mình và gia đình – đó đã là một bước thay đổi. ' +
-  'Báo cáo cá nhân hóa của bạn gồm thần số học, tử vi, bánh xe hạnh phúc và kế hoạch hành động riêng. Để mở báo cáo, bạn chỉ cần mã dưới đây.</p>' +
+  'Báo cáo cá nhân hóa của bạn gồm thần số học, tử vi, bánh xe hạnh phúc và kế hoạch hành động riêng. Để mở báo cáo, bạn chỉ cần số điện thoại đã đăng ký.</p>' +
 '</td></tr>' +
 
 // Thẻ mã
 '<tr><td style="padding:26px 34px 8px 34px;">' +
   '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + DARK + ';border-radius:16px;"><tr><td align="center" style="padding:28px 20px;">' +
-    '<div style="font:600 11px/16px ' + SANS + ';color:#F2A774;letter-spacing:2.6px;text-transform:uppercase;">Mã tra cứu của bạn</div>' +
+    '<div style="font:600 11px/16px ' + SANS + ';color:#F2A774;letter-spacing:2.6px;text-transform:uppercase;">Mã đăng ký của bạn</div>' +
     '<div style="font:700 44px/56px \'Courier New\', Courier, monospace;color:#FFFFFF;letter-spacing:7px;padding:10px 0 6px 0;">' + escapeHtml(code) + '</div>' +
-    '<div style="font:400 12px/18px ' + SANS + ';color:#BFB5AB;">Gồm ngày – tháng – số thứ tự đăng ký. Dùng cùng số điện thoại ' + escapeHtml(phoneHint) + '</div>' +
+    '<div style="font:400 12px/18px ' + SANS + ';color:#BFB5AB;">Gồm ngày – tháng – số thứ tự đăng ký. Hãy giữ lại khi cần liên hệ hỗ trợ.</div>' +
   '</td></tr></table>' +
 '</td></tr>' +
 
@@ -512,8 +539,7 @@ function sendResultEmail(job) {
   '<div style="font:700 17px/24px ' + SERIF + ';color:' + INK + ';padding-bottom:16px;">Cách xem kết quả</div>' +
   '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">' +
     step(1, 'Mở trang kết quả', step1) +
-    step(2, 'Nhập số điện thoại', 'Số điện thoại bạn đã dùng khi điền khảo sát.') +
-    step(3, 'Nhập mã tra cứu', 'Mã gồm 7 chữ số ở trên, rồi bấm xem để mở báo cáo của riêng bạn.') +
+    step(2, 'Nhập số điện thoại', 'Số điện thoại ' + escapeHtml(phoneHint) + ' bạn đã dùng khi điền khảo sát, rồi bấm xem để mở báo cáo của riêng bạn.') +
   '</table>' + button +
 '</td></tr>' +
 
@@ -536,7 +562,7 @@ function sendResultEmail(job) {
 
 // Lưu ý & chữ ký
 '<tr><td style="padding:18px 34px 34px 34px;">' +
-  '<p style="margin:0 0 18px 0;font:400 13px/22px ' + SANS + ';color:' + MUTE + ';">Hãy lưu lại email này. Mã chỉ mở được báo cáo khi đi cùng số điện thoại của bạn, vì vậy bạn có thể yên tâm về sự riêng tư.</p>' +
+  '<p style="margin:0 0 18px 0;font:400 13px/22px ' + SANS + ';color:' + MUTE + ';">Hãy lưu lại email này. Báo cáo chỉ mở được bằng đúng số điện thoại của bạn, vì vậy bạn có thể yên tâm về sự riêng tư.</p>' +
   '<p style="margin:0;font:400 14px/22px ' + SANS + ';color:' + MUTE + ';">Chúc bạn một hành trình hiểu mình và thay đổi thật nhiều ý nghĩa,<br>' +
   '<strong style="font:italic 700 17px/28px ' + SERIF + ';color:' + INK + ';">Dũng Gieo Hạt &amp; Ban Hỗ Trợ</strong></p>' +
 '</td></tr>' +
@@ -550,12 +576,10 @@ function sendResultEmail(job) {
 
   const plain =
     "Cảm ơn " + name + ", bản đồ hạnh phúc của bạn đã được lập.\n\n" +
-    "MÃ TRA CỨU CỦA BẠN: " + code + "\n" +
-    "(dùng cùng số điện thoại " + phoneHint + ")\n\n" +
+    "MÃ ĐĂNG KÝ CỦA BẠN: " + code + "\n\n" +
     "Cách xem kết quả:\n" +
     "1. Mở trang kết quả" + (hasUrl ? ": " + RESULT_PAGE_URL : " trên website (đường dẫn kết thúc bằng /ketqua)") + "\n" +
-    "2. Nhập số điện thoại bạn đã đăng ký\n" +
-    "3. Nhập mã tra cứu ở trên\n\n" +
+    "2. Nhập số điện thoại " + phoneHint + " bạn đã đăng ký\n\n" +
     "Hãy lưu lại email này.\n— " + BRAND_NAME;
 
   GmailApp.sendEmail(job.to, subject, plain, { htmlBody: html, name: BRAND_NAME });

@@ -39,3 +39,17 @@ export async function submitToSheet({ sheet, form, name, phone, email, fields }:
     body: body.toString(),
   });
 }
+
+/**
+ * Hỏi Apps Script: số điện thoại này đã làm khảo sát /bando chưa?
+ * Trả về true/false; null nếu không kiểm tra được (mất mạng...) — khi đó không chặn người dùng.
+ */
+export async function checkPhoneExists(phone: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=checkphone&phone=${encodeURIComponent(phone)}`);
+    const data = await res.json();
+    return data && data.ok ? !!data.exists : null;
+  } catch {
+    return null;
+  }
+}

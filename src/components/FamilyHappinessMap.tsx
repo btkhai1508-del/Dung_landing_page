@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { submitToSheet, SHEET_TABS } from '../lib/submitToSheet';
+import { submitToSheet, checkPhoneExists, SHEET_TABS } from '../lib/submitToSheet';
 import { BirthDateInput, isoToVN } from './BirthDateInput';
 import { ZaloPopups, ZaloOpenButton } from './ZaloPopup';
 import { computeNumerology } from '../lib/numerology';
@@ -167,6 +167,11 @@ const STEP_BACKGROUNDS: Record<number, { url: string; quote: string }> = {
     quote: '“Mỗi hạt mầm bạn gieo hôm nay sẽ nảy nở thành cây đời hạnh phúc ngày mai.”',
   },
   7: {
+    // Bước xem lại trước khi gửi
+    url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=2000&q=85',
+    quote: '“Dừng lại một chút để chắc rằng điều bạn chia sẻ đúng với chính mình.”',
+  },
+  8: {
     // Bước hoàn tất: Tương lai được tạo ra bởi những gì bạn làm hôm nay
     url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=2000&q=85',
     quote: '“Tương lai không được dự đoán, tương lai được tạo ra bởi những gì bạn làm hôm nay.”',
@@ -219,6 +224,10 @@ export const FamilyHappinessMap: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [phoneDuplicate, setPhoneDuplicate] = useState(false);
+  const [checkingPhone, setCheckingPhone] = useState(false);
+  const [editingFromReview, setEditingFromReview] = useState(false);
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
 
   // Trang thông báo quyền riêng tư & xin sự đồng ý
   const [isPrivacyStep, setIsPrivacyStep] = useState<boolean>(false);
@@ -293,10 +302,32 @@ export const FamilyHappinessMap: React.FC = () => {
     return Object.keys(errs).length === 0;
   };
 
-  const handleNext = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep((prev) => Math.min(prev + 1, 6));
+  const handleNext = async () => {
+    if (!validateStep(currentStep)) return;
+    if (currentStep === 6) {
+      // Mỗi số điện thoại chỉ làm khảo sát một lần
+      setCheckingPhone(true);
+      const exists = await checkPhoneExists(formData.phone);
+      setCheckingPhone(false);
+      if (exists) {
+        setPhoneDuplicate(true);
+        return;
+      }
+      setPhoneDuplicate(false);
     }
+    if (editingFromReview) {
+      setEditingFromReview(false);
+      setCurrentStep(7);
+      return;
+    }
+    setCurrentStep((prev) => Math.min(prev + 1, 7));
+  };
+
+  // Từ trang xem lại: bấm "Sửa" để quay về đúng phần cần chỉnh
+  const editStep = (step: number) => {
+    setEditingFromReview(true);
+    setReviewConfirmed(false);
+    setCurrentStep(step);
   };
 
   const handlePrev = () => {
@@ -310,9 +341,23 @@ export const FamilyHappinessMap: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateStep(6)) return;
-
+    // Kiểm tra lại toàn bộ các bước; nếu có chỗ chưa hợp lệ thì đưa người dùng về đúng bước đó
+    for (const st of [2, 3, 4, 5, 6]) {
+      if (!validateStep(st)) {
+        setEditingFromReview(true);
+        setCurrentStep(st);
+        return;
+      }
+    }
     setIsSubmitting(true);
+    const alreadyExists = await checkPhoneExists(formData.phone);
+    if (alreadyExists) {
+      setIsSubmitting(false);
+      setPhoneDuplicate(true);
+      setEditingFromReview(true);
+      setCurrentStep(6);
+      return;
+    }
     try {
       // Tính toán điểm số Bánh xe hạnh phúc
       const scores = formData.wheelScores;
@@ -494,7 +539,7 @@ export const FamilyHappinessMap: React.FC = () => {
       .join(' ');
   }, [formData.wheelScores]);
 
-  const activeBgInfo = STEP_BACKGROUNDS[isCompleted ? 7 : currentStep] || STEP_BACKGROUNDS[1];
+  const activeBgInfo = STEP_BACKGROUNDS[isCompleted ? 8 : currentStep] || STEP_BACKGROUNDS[1];
 
   return (
     <div className="relative min-h-screen text-white font-be-vietnam antialiased flex flex-col selection:bg-[#FA5B13] selection:text-white bg-neutral-950">
@@ -503,7 +548,7 @@ export const FamilyHappinessMap: React.FC = () => {
       {/* ======================================================== */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
         {Object.entries(STEP_BACKGROUNDS).map(([k, item]) => {
-          const active = isCompleted ? k === '7' : isPrivacyStep ? k === '1' : Number(k) === currentStep;
+          const active = isCompleted ? k === '8' : isPrivacyStep ? k === '1' : Number(k) === currentStep;
           return (
             <img
               key={k}
@@ -551,12 +596,12 @@ export const FamilyHappinessMap: React.FC = () => {
             {!isCompleted && (
               <div className="hidden sm:flex items-center gap-2.5">
                 <span className="text-sm font-bold text-white">
-                  {isPrivacyStep ? 'Quyền riêng tư' : `${currentStep}/6`}
+                  {isPrivacyStep ? 'Quyền riêng tư' : `${currentStep}/7`}
                 </span>
                 <div className="w-24 bg-white/25 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-[#FA5B13] h-full transition-all duration-300 rounded-full"
-                    style={{ width: isPrivacyStep ? '15%' : `${(currentStep / 6) * 100}%` }}
+                    style={{ width: isPrivacyStep ? '15%' : `${(currentStep / 7) * 100}%` }}
                   />
                 </div>
               </div>
@@ -569,7 +614,7 @@ export const FamilyHappinessMap: React.FC = () => {
           <div className="sm:hidden w-full bg-white/15 h-1.5">
             <div
               className="bg-[#FA5B13] h-full transition-all duration-300"
-              style={{ width: isPrivacyStep ? '15%' : `${(currentStep / 6) * 100}%` }}
+              style={{ width: isPrivacyStep ? '15%' : `${(currentStep / 7) * 100}%` }}
             />
           </div>
         )}
@@ -580,7 +625,7 @@ export const FamilyHappinessMap: React.FC = () => {
       {/* ======================================================== */}
       <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto px-4 sm:px-8 py-8 sm:py-12">
         {/* DÒNG TRÍCH DẪN DANCING SCRIPT TRÊN NỀN ẢNH VŨ TRỤ/THIÊN NHIÊN (CHỮ LỚN) */}
-        <div key={`quote-${isCompleted ? 7 : isPrivacyStep ? 'privacy' : currentStep}`} className="mb-8 pb-4 border-b border-white/15 text-center sm:text-left animate-fade">
+        <div key={`quote-${isCompleted ? 8 : isPrivacyStep ? 'privacy' : currentStep}`} className="mb-8 pb-4 border-b border-white/15 text-center sm:text-left animate-fade">
           {currentStep === 1 && !isPrivacyStep && !isCompleted && (
             <h2 className="text-3xl sm:text-5xl font-black text-white tracking-widest uppercase mb-2 font-be-vietnam drop-shadow-lg">
               QUÀ TẶNG
@@ -1417,7 +1462,7 @@ export const FamilyHappinessMap: React.FC = () => {
 
             {/* TRANG 6: NHẬN BẢN ĐỒ HẠNH PHÚC */}
             {currentStep === 6 && (
-              <form key="step-6" onSubmit={handleSubmit} className="space-y-8 animate-fade">
+              <div key="step-6" className="space-y-8 animate-fade">
                 <div className="space-y-2.5">
                   <div className="flex items-baseline gap-2.5">
                     <span className={`text-4xl sm:text-5xl font-bold text-[#FA5B13] ${headingClass}`}>06</span>
@@ -1441,13 +1486,27 @@ export const FamilyHappinessMap: React.FC = () => {
                     </label>
                     <input
                       type="tel"
-                      required
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, phone: e.target.value });
+                        if (phoneDuplicate) setPhoneDuplicate(false);
+                      }}
+                      onBlur={async () => {
+                        const raw = formData.phone.replace(/\s+/g, '');
+                        if (!/(84|0[3|5|7|8|9])+([0-9]{8})\b/.test(raw)) return;
+                        const exists = await checkPhoneExists(raw);
+                        if (exists) setPhoneDuplicate(true);
+                      }}
                       placeholder="0901234567"
                       className="w-full py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white bg-black/35 placeholder:text-white/60"
                     />
                     {errors.phone && <p className="text-sm text-red-300 font-medium">{errors.phone}</p>}
+                    {phoneDuplicate && (
+                      <p role="alert" className="text-sm sm:text-base text-red-200 font-medium leading-relaxed">
+                        Số điện thoại này đã làm khảo sát rồi, mỗi số chỉ làm được một lần. Bạn có thể xem kết quả của mình tại{' '}
+                        <a href="/ketqua" className="underline underline-offset-4 text-white">trang kết quả</a>, hoặc dùng một số điện thoại khác.
+                      </p>
+                    )}
                   </div>
 
                   {/* Email */}
@@ -1487,46 +1546,182 @@ export const FamilyHappinessMap: React.FC = () => {
                     </label>
                     {errors.consent && <p className="text-sm text-red-300 font-medium mt-1">{errors.consent}</p>}
                   </div>
+                </div>
+              </div>
+            )}
 
-                  {/* Submit button */}
-                  <div className="pt-4">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="w-full sm:w-auto px-9 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-[#FA5B13]/30 active:scale-95 disabled:opacity-60"
-                    >
-                      {isSubmitting ? (
-                        <span>Đang xử lý dữ liệu...</span>
-                      ) : (
-                        <>
-                          <span>Nhận Kết Quả & Quà Tặng</span>
-                          <ArrowRight className="w-5 h-5" />
-                        </>
-                      )}
-                    </button>
+            {/* TRANG 7: XEM LẠI TRƯỚC KHI GỬI */}
+            {currentStep === 7 && (
+              <form key="step-7" onSubmit={handleSubmit} className="space-y-9 animate-fade">
+                <div className="space-y-2.5">
+                  <div className="flex items-baseline gap-2.5">
+                    <span className={`text-4xl sm:text-5xl font-bold text-[#FA5B13] ${headingClass}`}>07</span>
+                    <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-widest">XEM LẠI TRƯỚC KHI GỬI</span>
                   </div>
+                  <h2 className={`text-2xl sm:text-4xl text-white ${headingClass} [text-wrap:balance]`}>
+                    Kiểm tra lại thông tin của bạn
+                  </h2>
+                </div>
+
+                <div className="rounded-2xl bg-[#FA5B13]/20 p-4 sm:p-5 text-base sm:text-lg text-white leading-relaxed">
+                  <strong className="font-bold">Lưu ý quan trọng: </strong>
+                  sau khi bấm “Gửi khảo sát”, bạn <strong className="font-bold">không thể sửa lại</strong> thông tin. Hãy đọc kỹ từng phần. Nếu cần chỉnh chỗ nào, bấm “Sửa” ở phần đó rồi quay lại đây.
+                </div>
+
+                {(() => {
+                  const sc = formData.wheelScores;
+                  const allObstacles = [...formData.obstacles, ...(formData.obstacleOther.trim() ? [`Khác: ${formData.obstacleOther.trim()}`] : [])];
+                  const relativesText =
+                    formData.includeRelatives && formData.relatives.length > 0
+                      ? formData.relatives
+                          .map((r, i) => `Người ${i + 1}: ${r.name.trim() || 'Không ghi tên'} (${r.relationship || 'Người thân'}), ${r.birthDate ? isoToVN(r.birthDate) : 'chưa rõ ngày sinh'}, ${r.gender || 'chưa rõ giới tính'}`)
+                          .join('\n')
+                      : 'Không khai báo người thân';
+                  const sections: { title: string; step: number; rows: [string, string][] }[] = [
+                    {
+                      title: 'Thông tin cơ bản',
+                      step: 2,
+                      rows: [
+                        ['Họ và tên', formData.fullName.trim() || 'Không ghi'],
+                        ['Ngày sinh (dương lịch)', isoToVN(formData.birthDate)],
+                        ['Giờ sinh', formData.birthTime || 'Không rõ'],
+                        ['Giới tính', formData.gender],
+                        ['Tỉnh/thành phố', formData.city.trim()],
+                        ['Công việc', formData.occupation.trim()],
+                      ],
+                    },
+                    {
+                      title: 'Gia đình',
+                      step: 3,
+                      rows: [
+                        ['Thời gian dành cho gia đình', formData.familyTime],
+                        ['Người thân khai kèm', relativesText],
+                      ],
+                    },
+                    {
+                      title: 'Bánh xe hạnh phúc',
+                      step: 4,
+                      rows: LIFE_AREAS.map((a) => [a.label, `${sc[a.key as keyof typeof sc]}/10`] as [string, string]),
+                    },
+                    {
+                      title: 'Điều bạn mong muốn',
+                      step: 5,
+                      rows: [
+                        ['Lĩnh vực muốn cải thiện trước', formData.priorityArea],
+                        ['Điều muốn thay đổi', formData.desireChange.trim() || 'Không ghi'],
+                        ['Rào cản lớn nhất', allObstacles.length ? allObstacles.join(', ') : 'Không chọn'],
+                        ['Nhận giải pháp chi tiết', formData.wantGiftSolution],
+                        ['Cách muốn được hỗ trợ', formData.supportMethods.length ? formData.supportMethods.join(', ') : 'Không chọn'],
+                      ],
+                    },
+                    {
+                      title: 'Liên hệ',
+                      step: 6,
+                      rows: [
+                        ['Số điện thoại / Zalo', formData.phone.trim()],
+                        ['Email', formData.email.trim() || 'Không có'],
+                      ],
+                    },
+                  ];
+                  return sections.map((sec) => (
+                    <section key={sec.title} className="space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">{sec.title}</h3>
+                        <button
+                          type="button"
+                          onClick={() => editStep(sec.step)}
+                          className="cursor-pointer text-sm font-semibold text-white underline underline-offset-4 hover:text-[#FFA877] transition-colors"
+                        >
+                          Sửa phần này
+                        </button>
+                      </div>
+                      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                        {sec.rows.map(([k, v]) => (
+                          <div key={k} className="min-w-0">
+                            <dt className="text-xs sm:text-sm text-white/55">{k}</dt>
+                            <dd className="mt-1 text-[15px] sm:text-base font-semibold text-white break-words whitespace-pre-line">{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </section>
+                  ));
+                })()}
+
+                {phoneDuplicate && (
+                  <p role="alert" className="text-base text-red-200 font-medium leading-relaxed">
+                    Số điện thoại này đã làm khảo sát rồi, mỗi số chỉ làm được một lần. Bạn có thể xem kết quả tại{' '}
+                    <a href="/ketqua" className="underline underline-offset-4 text-white">trang kết quả</a>, hoặc bấm “Sửa phần này” ở mục Liên hệ để dùng số khác.
+                  </p>
+                )}
+
+                <label className="flex items-start gap-3 cursor-pointer text-base sm:text-lg text-white leading-relaxed">
+                  <input
+                    type="checkbox"
+                    checked={reviewConfirmed}
+                    onChange={(e) => setReviewConfirmed(e.target.checked)}
+                    className="mt-1 accent-[#FA5B13] w-5 h-5 shrink-0"
+                  />
+                  <span className="[text-wrap:balance]">Tôi đã kiểm tra kỹ và hiểu rằng sau khi gửi sẽ không sửa lại được.</span>
+                </label>
+
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(6)}
+                    className="text-base font-semibold text-white hover:text-[#FFA877] inline-flex items-center gap-2 cursor-pointer transition-colors py-2.5 px-3 rounded-lg hover:bg-white/10"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Quay lại</span>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !reviewConfirmed}
+                    className="px-9 py-4 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-[#FA5B13]/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? (
+                      <span>Đang gửi...</span>
+                    ) : (
+                      <>
+                        <span>Gửi khảo sát</span>
+                        <ArrowRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </button>
                 </div>
               </form>
             )}
 
             {/* LINEAR PAGINATION BUTTONS */}
-            {currentStep > 1 && currentStep < 6 && (
-              <div className="pt-8 border-t border-white/15 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={handlePrev}
-                  className="text-base font-semibold text-white hover:text-[#FFA877] inline-flex items-center gap-2 cursor-pointer transition-colors py-2.5 px-3 rounded-lg hover:bg-white/10"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Quay lại</span>
-                </button>
+            {currentStep > 1 && currentStep < 7 && (
+              <div className="pt-8 border-t border-white/15 flex flex-wrap items-center justify-between gap-4">
+                {editingFromReview ? (
+                  <span />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    className="text-base font-semibold text-white hover:text-[#FFA877] inline-flex items-center gap-2 cursor-pointer transition-colors py-2.5 px-3 rounded-lg hover:bg-white/10"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Quay lại</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="px-8 py-3.5 bg-white hover:bg-neutral-200 text-gray-950 font-bold rounded-xl text-base sm:text-lg inline-flex items-center gap-2.5 cursor-pointer transition-all shadow-md active:scale-95"
+                  disabled={checkingPhone}
+                  className="px-8 py-3.5 bg-white hover:bg-neutral-200 text-gray-950 font-bold rounded-xl text-base sm:text-lg inline-flex items-center gap-2.5 cursor-pointer transition-all shadow-md active:scale-95 disabled:opacity-60"
                 >
-                  <span>Tiếp tục</span>
+                  <span>
+                    {checkingPhone
+                      ? 'Đang kiểm tra...'
+                      : editingFromReview
+                        ? 'Lưu & quay lại trang xem lại'
+                        : currentStep === 6
+                          ? 'Xem lại thông tin'
+                          : 'Tiếp tục'}
+                  </span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
