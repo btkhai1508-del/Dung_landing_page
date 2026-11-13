@@ -19,7 +19,9 @@ import {
   BALANCE_TEXT, PRIORITY_PLAN, AreaKey,
 } from '../data/lifeWheel';
 import { analyzeWheel, Scores } from './wheelAnalysis';
+import { FOCUS_KEYS, FOCUS_INFO, SEVERITY_NOTE, SUPPORT_PHONE, SUPPORT_EMAIL, SUPPORT_ZALO_LINK } from '../data/focusAreas';
 import { HOW_TO_READ, AREA_QUESTIONS, NEXT_STEPS } from '../data/wheelLinks';
+import { LP_FAMILY, FAMILY_YEAR_HELP, STAGES, HANH_ACTIVITY, FAMILY_SCORE_NOTE, ROLE_WHEEL, MAX_RELATIVES } from '../data/familyProfiles';
 import { detectRole, ROLE_LABEL, ROLE_TIP, CHI_REL, HANH_REL, OVERALL } from '../data/familyData';
 
 // ============ Đầu vào ============
@@ -121,6 +123,28 @@ export interface Report {
     links: { tone: string; title: string; text: string; action?: string }[];
     cycles: { name: string; state: 'down' | 'up'; text: string; weakest: { label: string; score: number }; advice: string }[];
     nextSteps: string[];
+    focus: {
+      key: string;
+      label: string;
+      score: number;
+      level: string;
+      levelTone: string;
+      reason: string;
+      severity: string;
+      why: string;
+      signs: string[];
+      causes: string[];
+      ripples: string[];
+      linked: { label: string; score: number; text: string }[];
+      alsoLow: { label: string; score: number }[];
+      plan: { title: string; items: string[] }[];
+      mistakes: string[];
+      lpView: string;
+      hanhTip: string;
+      contactReason: string;
+      caution: string;
+    }[];
+    contact: { phone: string; email: string; zaloLink: string };
     strongest: { label: string; score: number };
     weakest: { label: string; score: number };
     priority: { key: string; label: string; score: number; why: string; weeks: string[]; metric: string; lpStyle: string };
@@ -131,22 +155,33 @@ export interface Report {
   family: {
     familyTimeLabel: string;
     familyTimeText: string;
+    scoreNote: string;
+    summary: { total: number; mostHarmonious: string; mostChallenging: string; sameLifePath: string[]; commonHanh: string } | null;
     members: {
       name: string;
       relationship: string;
       roleLabel: string;
       age: number | null;
+      stage: { label: string; tip: string };
       canChi: string;
       napAm: string;
       hanh: string;
       lifePath: number;
+      hasName: boolean;
       chiRel: { label: string; text: string };
       hanhRel: { label: string; text: string };
       lpCompat: { label: string; text: string };
       overallLabel: string;
       overallText: string;
       roleTip: string;
+      profile: { lpTitle: string; essence: string; strengths: string[]; challenges: string[]; growth: string; mantra: string; keywords: string[] };
+      nameNumbers: { label: string; value: number; text: string }[];
+      tuvi: { animal: string; chiPersonality: string; napAmImage: string; napAmText: string; hanhTrait: string; colors: string };
+      year: { value: number; title: string; theme: string; help: string };
+      wheelLinks: { tone: 'lift' | 'share' | 'both'; title: string; text: string }[];
+      howTo: { talk: string; appreciate: string; conflict: string; gives: string; needs: string };
     }[];
+    plan: { title: string; items: string[] }[];
   };
   plan: {
     intro: string;
@@ -320,6 +355,40 @@ export function buildReport(input: ReportInput, now: Date = new Date()): Report 
     related: wa.related[x.key] || [],
   }));
 
+  // Lĩnh vực trọng yếu (Sức khỏe, Tài chính, Sự nghiệp): dưới 6 điểm, hoặc là điểm thấp nhất bánh xe (và không quá cao)
+  const lpFocusView: Record<string, string> = { health: lpData.health, finance: lpData.money, career: lpData.career };
+  const focus = FOCUS_KEYS.map((k) => {
+    const x = scoresFull.find((a) => a.key === k)!;
+    const below6 = x.score < 6;
+    // thấp hơn hẳn mọi lĩnh vực còn lại (điểm bằng nhau không tính) và không quá cao
+    const lowestAll = x.score <= 7 && x.score < Math.min(...scoresFull.filter((a) => a.key !== k).map((a) => a.score));
+    if (!below6 && !lowestAll) return null;
+    const info = FOCUS_INFO[k as 'health' | 'finance' | 'career'];
+    return {
+      key: k as string,
+      label: x.label,
+      score: x.score,
+      level: x.level,
+      levelTone: x.levelTone,
+      reason: below6 ? 'Điểm dưới 6' : 'Điểm thấp nhất trong bánh xe',
+      severity: x.score <= 3 ? SEVERITY_NOTE.urgent : below6 ? SEVERITY_NOTE.low : SEVERITY_NOTE.weakest,
+      why: info.why,
+      signs: info.signs,
+      causes: info.causes,
+      ripples: info.ripples,
+      linked: x.related.map((r) => ({ label: r.label, score: r.score, text: r.text })),
+      alsoLow: scoresFull.filter((a) => a.key !== k && a.score <= 5).map((a) => ({ label: a.label, score: a.score })),
+      plan: info.plan,
+      mistakes: info.mistakes,
+      lpView: lpFocusView[k],
+      hanhTip: x.hanhTip,
+      contactReason: info.contactReason,
+      caution: info.caution,
+    };
+  })
+    .filter(Boolean)
+    .sort((a, b) => a!.score - b!.score) as Report['wheel']['focus'];
+
   const obstacles = (input.obstacles || [])
     .map((o) => {
       const name = o.replace(/^Khác:\s*/i, '');
@@ -330,36 +399,145 @@ export function buildReport(input: ReportInput, now: Date = new Date()): Report 
   const support = (input.support || []).filter((s) => SUPPORT_TIP[s]).map((s) => ({ name: s, tip: SUPPORT_TIP[s] }));
 
   // ---------- Gia đình ----------
-  const members = (input.relatives || [])
+  const userScores = scoreMap;
+  const labelOfArea = (k: AreaKey) => AREAS.find((x) => x.key === k)!.label;
+  const memberCore = (input.relatives || [])
+    .slice(0, MAX_RELATIVES)
     .map((r) => {
       const rb = parseBirthDate(r.birthDate);
       if (!rb) return null;
       const rtv = computeTuVi(rb.d, rb.m, rb.y, r.gender, null, now);
-      const rnum = computeNumerology('', rb.d, rb.m, rb.y, now);
+      const rnum = computeNumerology((r.name || '').trim(), rb.d, rb.m, rb.y, now);
       const role = detectRole(r.relationship);
       const chiK = chiRelation(tv.chiIdx, rtv.chiIdx);
       const hanhK = hanhRelation(hanh, rtv.napAm.hanh);
       const lpc = lifePathCompat(num.lifePath, rnum.lifePath);
       const score = CHI_REL[chiK].score + HANH_REL[hanhK].score + lpCompatScore(lpc);
       const overall = OVERALL.find((o) => score >= o.min) || OVERALL[OVERALL.length - 1];
+      // Không có tên thì gọi bằng quan hệ người dùng đã gõ (ví dụ "Chị gái"), không có nữa thì dùng nhóm vai trò
+      const name = (r.name || '').trim() || (r.relationship || '').trim() || ROLE_LABEL[role];
+      const age = now.getFullYear() - rb.y;
+      const base = rnum.lifePath === 11 ? 2 : rnum.lifePath === 22 ? 4 : rnum.lifePath === 33 ? 6 : rnum.lifePath;
+      const fam = LP_FAMILY[base] || LP_FAMILY[reduce(base, false)];
+      const lpd = lpInfo(rnum.lifePath);
+      const hi = HANH_INFO[rtv.napAm.hanh];
+      const chiInfo = CHI_INFO[rtv.chiIdx];
+      const nap = NAP_AM_TEXT[findNapIdx(rtv.canIdx, rtv.chiIdx)];
+      const py = PERSONAL_YEAR[rnum.personalYear];
+
+      // Nối thần số học của họ với bánh xe của bạn
+      const wheelLinks: Report['family']['members'][number]['wheelLinks'] = [];
+      const liftAreas = fam.gives.filter((a) => userScores[a] <= 6);
+      const strongGives = fam.gives.filter((a) => userScores[a] >= 7);
+      if (liftAreas.length) {
+        wheelLinks.push({ tone: 'lift', title: `${name} có thể giúp bạn nâng: ${liftAreas.map((a) => `${labelOfArea(a)} (${userScores[a]}/10)`).join(', ')}`, text: fam.giveText });
+      } else if (strongGives.length) {
+        wheelLinks.push({ tone: 'share', title: `${name} và bạn cùng mạnh ở: ${strongGives.map((a) => labelOfArea(a)).join(', ')}`, text: 'Hai bạn đều có thế mạnh ở các lĩnh vực này nên rất hợp để cùng đặt một mục tiêu chung và hỗ trợ nhau thực hiện.' });
+      }
+      const needStrong = fam.needs.filter((a) => userScores[a] >= 7);
+      const needWeak = fam.needs.filter((a) => userScores[a] <= 5);
+      if (needStrong.length) {
+        wheelLinks.push({ tone: 'share', title: `Bạn có thể giúp ${name} ở: ${needStrong.map((a) => `${labelOfArea(a)} (${userScores[a]}/10)`).join(', ')}`, text: `${fam.needText} Bạn đang khá mạnh ở lĩnh vực này nên có thể là người đồng hành của họ.` });
+      }
+      if (needWeak.length) {
+        wheelLinks.push({ tone: 'both', title: `Cả hai cùng cần chăm sóc: ${needWeak.map((a) => `${labelOfArea(a)} (${userScores[a]}/10)`).join(', ')}`, text: `${fam.needText} Bạn cũng đang thấp ở lĩnh vực này nên hãy cùng nhau bắt đầu từ một việc nhỏ chung.` });
+      }
+      if (userScores.family <= 5) {
+        wheelLinks.push({ tone: 'both', title: `Điểm Gia đình của bạn đang ${userScores.family}/10`, text: `Mối quan hệ với ${name} là nơi nên bắt đầu: ${fam.talk} ${fam.appreciate}` });
+      }
+      Object.entries(ROLE_WHEEL[role] || {}).forEach(([area, text]) => {
+        if (userScores[area as AreaKey] <= 6) {
+          wheelLinks.push({ tone: 'both', title: `${labelOfArea(area as AreaKey)} (${userScores[area as AreaKey]}/10) và ${ROLE_LABEL[role].toLowerCase()}`, text: text as string });
+        }
+      });
+
+      const nameNumbers: { label: string; value: number; text: string }[] = [];
+      if (rnum.hasName) {
+        nameNumbers.push({ label: 'Số sứ mệnh (từ họ tên)', value: rnum.expression, text: textOf(EXPRESSION, rnum.expression) });
+        nameNumbers.push({ label: 'Số linh hồn (nguyên âm trong tên)', value: rnum.soulUrge, text: textOf(SOUL_URGE, rnum.soulUrge) });
+        nameNumbers.push({ label: 'Số nhân cách (phụ âm trong tên)', value: rnum.personality, text: textOf(PERSONALITY, rnum.personality) });
+      }
+
       return {
-        name: r.name || ROLE_LABEL[role],
-        relationship: r.relationship || ROLE_LABEL[role],
-        roleLabel: ROLE_LABEL[role],
-        age: now.getFullYear() - rb.y,
-        canChi: rtv.canChi,
-        napAm: rtv.napAm.name,
-        hanh: rtv.napAm.hanh,
-        lifePath: rnum.lifePath,
-        chiRel: { label: `${CHI[tv.chiIdx]} – ${CHI[rtv.chiIdx]}: ${CHI_REL[chiK].label}`, text: CHI_REL[chiK].text },
-        hanhRel: { label: `${hanh} – ${rtv.napAm.hanh}: ${HANH_REL[hanhK].label}`, text: HANH_REL[hanhK].text },
-        lpCompat: { label: `Số ${num.lifePath} – Số ${rnum.lifePath}: ${LP_COMPAT_LABEL[lpc]}`, text: COMPAT_TEXT[lpc] },
-        overallLabel: overall.label,
-        overallText: overall.text,
-        roleTip: ROLE_TIP[role],
+        score,
+        member: {
+          name,
+          relationship: r.relationship || ROLE_LABEL[role],
+          roleLabel: ROLE_LABEL[role],
+          age,
+          stage: STAGES.find((st) => age <= st.max) || STAGES[STAGES.length - 1],
+          canChi: rtv.canChi,
+          napAm: rtv.napAm.name,
+          hanh: rtv.napAm.hanh,
+          lifePath: rnum.lifePath,
+          hasName: rnum.hasName,
+          chiRel: { label: `${CHI[tv.chiIdx]} – ${CHI[rtv.chiIdx]}: ${CHI_REL[chiK].label}`, text: CHI_REL[chiK].text },
+          hanhRel: { label: `${hanh} – ${rtv.napAm.hanh}: ${HANH_REL[hanhK].label}`, text: HANH_REL[hanhK].text },
+          lpCompat: { label: `Số ${num.lifePath} – Số ${rnum.lifePath}: ${LP_COMPAT_LABEL[lpc]}`, text: COMPAT_TEXT[lpc] },
+          overallLabel: overall.label,
+          overallText: overall.text,
+          roleTip: ROLE_TIP[role],
+          profile: { lpTitle: lpd.title, essence: lpd.essence, strengths: lpd.strengths, challenges: lpd.challenges, growth: lpd.growth, mantra: lpd.mantra, keywords: lpd.keywords },
+          nameNumbers,
+          tuvi: {
+            animal: `${CHI[rtv.chiIdx]} – ${chiInfo.animal}`,
+            chiPersonality: chiInfo.personality,
+            napAmImage: nap.image,
+            napAmText: nap.text,
+            hanhTrait: hi.trait,
+            colors: `Màu bản mệnh: ${hi.colorsOwn}. Màu hỗ trợ: ${hi.colorsSupport}.`,
+          },
+          year: { value: rnum.personalYear, title: py.title, theme: py.theme, help: FAMILY_YEAR_HELP[rnum.personalYear] },
+          wheelLinks,
+          howTo: { talk: fam.talk, appreciate: fam.appreciate, conflict: fam.conflict, gives: fam.giveText, needs: fam.needText },
+        },
       };
     })
-    .filter(Boolean) as Report['family']['members'];
+    .filter(Boolean) as { score: number; member: Report['family']['members'][number] }[];
+  const members = memberCore.map((x) => x.member);
+
+  // Tổng hợp & kế hoạch gia đình 30 ngày
+  let familySummary: Report['family']['summary'] = null;
+  let familyPlan: Report['family']['plan'] = [];
+  if (memberCore.length) {
+    const byScore = [...memberCore].sort((a, b) => a.score - b.score);
+    const hardest = byScore[0].member;
+    const closest = byScore[byScore.length - 1].member;
+    const lpGroups: Record<number, string[]> = {};
+    memberCore.forEach((x) => (lpGroups[x.member.lifePath] = [...(lpGroups[x.member.lifePath] || []), x.member.name]));
+    const same = Object.entries(lpGroups).filter(([, v]) => v.length > 1).map(([k, v]) => `${v.join(', ')} cùng số chủ đạo ${k}`);
+    const hanhCount: Record<string, number> = { [hanh]: 1 };
+    memberCore.forEach((x) => (hanhCount[x.member.hanh] = (hanhCount[x.member.hanh] || 0) + 1));
+    const commonHanh = Object.entries(hanhCount).sort((a, b) => b[1] - a[1])[0][0];
+    familySummary = { total: memberCore.length, mostHarmonious: closest.name, mostChallenging: hardest.name, sameLifePath: same, commonHanh };
+    const focusPeople = byScore.slice(0, Math.min(2, byScore.length)).map((x) => x.member);
+    const thanks = [...byScore].reverse().slice(0, Math.min(3, byScore.length)).map((x) => x.member);
+    familyPlan = [
+      {
+        title: 'Tuần 1 – Trò chuyện riêng',
+        items: focusPeople.map((m) => `Dành 20–30 phút trò chuyện riêng với ${m.name} (${m.roleLabel.toLowerCase()}). Cách nói phù hợp: ${m.howTo.talk} Điều dễ gây va chạm: ${m.howTo.conflict}`),
+      },
+      {
+        title: 'Tuần 2 – Hoạt động chung',
+        items: [
+          `Tổ chức một hoạt động có mặt càng nhiều người thân càng tốt: ${HANH_ACTIVITY[commonHanh]} (hợp với hành ${commonHanh}, hành xuất hiện nhiều nhất trong gia đình bạn).`,
+          userScores.family <= 5 ? 'Vì điểm Gia đình của bạn đang thấp, hãy bắt đầu nhỏ: 30 phút, không điện thoại, không bàn chuyện căng thẳng.' : 'Hãy chụp một tấm ảnh chung để lưu lại khoảnh khắc này.',
+        ],
+      },
+      {
+        title: 'Tuần 3 – Ghi nhận từng người',
+        items: thanks.map((m) => `Nói với ${m.name} một lời ghi nhận cụ thể. ${m.howTo.appreciate}`),
+      },
+      {
+        title: 'Tuần 4 – Họp gia đình 30 phút',
+        items: [
+          'Mỗi người nói một điều biết ơn và một điều mong muốn ở gia đình, không ai ngắt lời.',
+          'Cùng đặt một quy tắc chung nhỏ (ví dụ: bữa tối không điện thoại) và hẹn kiểm tra lại sau một tháng.',
+          `Chấm lại điểm Gia đình trong bánh xe của bạn (hiện ${userScores.family}/10) và so sánh.`,
+        ],
+      },
+    ];
+  }
 
   // ---------- Kế hoạch 30 ngày ----------
   const secondWeak = sorted.find((x) => x.key !== priArea.key) || weakest;
@@ -480,6 +658,8 @@ export function buildReport(input: ReportInput, now: Date = new Date()): Report 
       links: wa.links,
       cycles: wa.cycles,
       nextSteps: NEXT_STEPS,
+      focus,
+      contact: { phone: SUPPORT_PHONE, email: SUPPORT_EMAIL, zaloLink: SUPPORT_ZALO_LINK },
       strongest: { label: strongest.label, score: strongest.score },
       weakest: { label: weakest.label, score: weakest.score },
       priority: {
@@ -498,7 +678,10 @@ export function buildReport(input: ReportInput, now: Date = new Date()): Report 
     family: {
       familyTimeLabel: input.familyTime || '',
       familyTimeText: FAMILY_TIME_TEXT[input.familyTime || ''] || '',
+      scoreNote: userScores.family <= 4 ? FAMILY_SCORE_NOTE.low : userScores.family <= 7 ? FAMILY_SCORE_NOTE.mid : FAMILY_SCORE_NOTE.high,
+      summary: familySummary,
       members,
+      plan: familyPlan,
     },
     plan: {
       intro: `Kế hoạch 30 ngày dưới đây xoay quanh lĩnh vực bạn chọn ưu tiên – “${priArea.label}” – và được điều chỉnh theo số chủ đạo ${num.lifePath}, bản mệnh ${hanh} và chủ đề năm ${num.currentYear} của bạn.`,

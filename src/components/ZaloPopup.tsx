@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-export const ZALO_GH3_LINK = 'https://zalo.me/g/jgxfxq6uu7xuuobade3o';
+export const ZALO_GROUP_LINK = 'https://zalo.me/g/jgxfxq6uu7xuuobade3o';
 const OPEN_EVENT = 'open-zalo-popup';
 const AFTER_MS = 60_000; // lần 1: sau 1 phút
 const SHARE_TEXT =
@@ -13,7 +13,7 @@ export const ZaloOpenButton: React.FC<{ className?: string }> = ({ className = '
     onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))}
     className={`cursor-pointer text-sm sm:text-base font-semibold text-[#FFA877] hover:text-white underline underline-offset-4 transition ${className}`}
   >
-    Vào nhóm Zalo GH3 để nhận kết quả chi tiết &rarr;
+    Vui lòng tham gia nhóm Zalo Gieo Hạt để nhận kết quả &rarr;
   </button>
 );
 
@@ -35,7 +35,7 @@ const seen = {
 };
 
 /**
- * MỘT cửa sổ Zalo duy nhất (vào nhóm GH3 + rủ người thân), mở ở hai thời điểm:
+ * MỘT cửa sổ Zalo duy nhất (vào nhóm Zalo Gieo Hạt + rủ người thân), mở ở hai thời điểm:
  *  1) sau 1 phút kể từ khi vào trang;
  *  2) khi người dùng cuộn xuống cuối trang.
  * Mỗi thời điểm chỉ kích hoạt một lần mỗi phiên; nếu cửa sổ đang mở thì không mở chồng.
@@ -103,10 +103,10 @@ export const ZaloPopups: React.FC = () => {
   }, [open, close]);
 
   const share = async () => {
-    const text = `${SHARE_TEXT} ${ZALO_GH3_LINK}`;
+    const text = `${SHARE_TEXT} ${ZALO_GROUP_LINK}`;
     try {
       if (navigator.share) {
-        await navigator.share({ text, url: ZALO_GH3_LINK });
+        await navigator.share({ text, url: ZALO_GROUP_LINK });
         return;
       }
     } catch {
@@ -141,9 +141,9 @@ export const ZaloPopups: React.FC = () => {
           ×
         </button>
 
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#E8590C]">Nhóm Zalo GH3</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#E8590C]">Nhóm Zalo Gieo Hạt</p>
         <h2 id="zalo-title" className="mt-2 pr-8 font-playfair-heading text-[26px] leading-[1.25] italic font-medium">
-          Vào nhóm Zalo để nhận kết quả phân tích tử vi, thần số học chi tiết
+          Vui lòng tham gia nhóm Zalo Gieo Hạt để được nhận kết quả phân tích tử vi, thần số học chi tiết
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-[#4A423C]">
           Bấm nút bên dưới, hoặc quét mã QR nếu bạn đang xem trên máy tính, rồi bấm “Tham gia nhóm”.
@@ -152,18 +152,18 @@ export const ZaloPopups: React.FC = () => {
         <div className="mt-6 flex flex-col items-center gap-5">
           <img
             src="/assets/zalo-gh3-qr.jpg"
-            alt="Mã QR vào nhóm Zalo GH3"
+            alt="Mã QR vào nhóm Zalo Gieo Hạt"
             width={208}
             height={208}
             className="h-[208px] w-[208px] rounded-2xl bg-white object-contain p-2 ring-1 ring-black/10"
           />
           <a
-            href={ZALO_GH3_LINK}
+            href={ZALO_GROUP_LINK}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full rounded-full bg-[#E8590C] py-3.5 text-center text-[15px] font-bold text-white hover:bg-[#cf4f09] transition"
           >
-            Vào nhóm Zalo GH3
+            Vào nhóm Zalo Gieo Hạt
           </a>
         </div>
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { submitToSheet, checkPhoneExists, SHEET_TABS } from '../lib/submitToSheet';
 import { BirthDateInput, isoToVN } from './BirthDateInput';
+import { TimeInput24, isValidTime24 } from './TimeInput24';
 import { ZaloPopups, ZaloOpenButton } from './ZaloPopup';
 import { computeNumerology } from '../lib/numerology';
 import { computeTuVi } from '../lib/tuviEngine';
@@ -246,6 +247,7 @@ export const FamilyHappinessMap: React.FC = () => {
     if (step === 2) {
       if (!formData.birthDate) errs.birthDate = 'Vui lòng chọn ngày tháng năm sinh';
       else if (birthDateError(formData.birthDate)) errs.birthDate = birthDateError(formData.birthDate)!;
+      if (formData.birthTime && !isValidTime24(formData.birthTime)) errs.birthTime = 'Giờ sinh chưa đúng. Hãy nhập theo giờ 24h, ví dụ 17:45, hoặc xóa trống nếu không nhớ.';
       if (!formData.gender) errs.gender = 'Vui lòng chọn giới tính';
       if (!formData.city.trim()) errs.city = 'Vui lòng nhập tỉnh/thành phố';
       if (!formData.occupation.trim()) errs.occupation = 'Vui lòng nhập công việc hiện tại';
@@ -429,7 +431,7 @@ export const FamilyHappinessMap: React.FC = () => {
           'Rào cản lớn nhất': obstaclesText,
           'Nhận quà tặng giải pháp chi tiết': formData.wantGiftSolution,
           'Hình thức hỗ trợ': formData.supportMethods.join(', '),
-          'Kênh nhận bản đồ': 'Nhóm Zalo GH3',
+          'Kênh nhận bản đồ': 'Nhóm Zalo Gieo Hạt',
           'Đồng ý điều khoản': formData.consent ? 'Đồng ý' : 'Chưa',
           // Dữ liệu có cấu trúc để trang /ketqua dựng báo cáo (không phụ thuộc vào cách ghép chuỗi)
           'Dữ liệu báo cáo': JSON.stringify({
@@ -456,7 +458,7 @@ export const FamilyHappinessMap: React.FC = () => {
   };
 
   const addRelative = () => {
-    if (formData.relatives.length < 3) {
+    if (formData.relatives.length < 10) {
       setFormData({
         ...formData,
         relatives: [
@@ -647,11 +649,11 @@ export const FamilyHappinessMap: React.FC = () => {
               </h1>
               <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[56ch]">
                 Cảm ơn {formData.fullName.trim() ? <strong className="font-semibold text-white">{formData.fullName.trim()}</strong> : 'bạn'} đã dành thời gian nhìn lại chính mình và gia đình.
-                Bước cuối cùng: hãy vào <strong className="font-semibold text-[#FFA877]">nhóm Zalo GH3</strong> bên dưới để nhận kết quả phân tích tử vi và thần số học chi tiết.
+                Bước cuối cùng: vui lòng tham gia <strong className="font-semibold text-[#FFA877]">nhóm Zalo Gieo Hạt</strong> để được nhận kết quả phân tích tử vi và thần số học chi tiết.
               </p>
             </header>
 
-            {/* Nhóm Zalo GH3: cửa sổ tự mở khi đọc đến cuối trang */}
+            {/* Nhóm Zalo Gieo Hạt: cửa sổ tự mở khi đọc đến cuối trang */}
             <ZaloPopups />
 
             {/* Thông tin cơ bản */}
@@ -697,7 +699,7 @@ export const FamilyHappinessMap: React.FC = () => {
               <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[60ch]">
                 Đây mới là bản xem nhanh. Muốn nhận thêm phần luận giải{' '}
                 <span className="text-white/60">Cung Phi Bát Trạch, Cung Mệnh & Thân, Cung Phu Thê, Cung Tài Bạch</span>,
-                hãy vào <strong className="font-semibold text-white">nhóm Zalo GH3</strong> ở trên để nhận kết quả phân tích chi tiết.
+                vui lòng tham gia <strong className="font-semibold text-white">nhóm Zalo Gieo Hạt</strong> để được nhận kết quả phân tích chi tiết.
               </p>
             </section>
 
@@ -1023,12 +1025,16 @@ export const FamilyHappinessMap: React.FC = () => {
                       <label className="block text-base sm:text-lg font-semibold text-white">
                         3. Giờ sinh <span className="text-white font-normal text-sm sm:text-base">(bỏ qua nếu không nhớ)</span>
                       </label>
-                      <input
-                        type="time"
+                      <TimeInput24
                         value={formData.birthTime}
-                        onChange={(e) => setFormData({ ...formData, birthTime: e.target.value })}
-                        className="w-full py-3 sm:py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white transition-all bg-black/35 backdrop-blur-xs [color-scheme:dark]"
+                        onChange={(v) => setFormData((prev) => ({ ...prev, birthTime: v }))}
+                        className="w-full py-3 sm:py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white tabular-nums transition-all bg-black/35 backdrop-blur-xs placeholder:text-white/45"
                       />
+                      <p className="text-xs sm:text-sm text-white/80 italic leading-relaxed pl-1">
+                        <span className="text-[#FFA877] font-semibold not-italic">* Lưu ý: </span>
+                        nhập theo <strong className="not-italic text-white">giờ 24h</strong> (không dùng AM/PM), ví dụ 05:30 là 5 giờ 30 sáng, 17:45 là 5 giờ 45 chiều. Gõ số liền, ô tự thêm dấu “:”.
+                      </p>
+                      {errors.birthTime && <p className="text-sm text-red-300 font-medium">{errors.birthTime}</p>}
                     </div>
                   </div>
 
@@ -1135,7 +1141,7 @@ export const FamilyHappinessMap: React.FC = () => {
                       8. Bạn có muốn nhận thêm gợi ý kết nối cho những người thân đang sống cùng không? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <p className="text-base text-white font-normal">
-                      Mỗi người chỉ cần 4 thông tin ngắn. Tối đa 3 người thân (vợ/chồng, con, cha/mẹ).
+                      Mỗi người chỉ cần 4 thông tin ngắn. Tối đa 10 người thân trong gia đình (vợ/chồng, con, cha/mẹ, anh chị em, ông bà…). Mỗi người sẽ có một phần báo cáo chi tiết riêng.
                     </p>
 
                     <div className="flex flex-wrap gap-3 pt-1">
@@ -1174,6 +1180,10 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Danh sách người thân liền mạch */}
                   {formData.includeRelatives && (
                     <div className="space-y-6 pt-3">
+                      <div className="text-xs sm:text-sm text-white/90 italic font-normal leading-relaxed pl-3 border-l-2 border-[#FFA877] py-1 bg-white/5 rounded-r-lg">
+                        <span className="text-[#FFA877] font-semibold not-italic">* Lưu ý: </span>
+                        Tên người thân điền đúng (theo khai sinh) thì các chỉ số tính từ tên (số sứ mệnh, linh hồn, nhân cách) càng chính xác. Nếu không chắc tên, bạn có thể bỏ trống, báo cáo vẫn đầy đủ phần ngày sinh. Nếu tên không đúng thì các chỉ số này sẽ không chính xác.
+                      </div>
                       {formData.relatives.map((rel, idx) => (
                         <div key={idx} className="space-y-3 pb-6 border-b border-white/15">
                           <div className="flex items-center justify-between">
@@ -1197,11 +1207,11 @@ export const FamilyHappinessMap: React.FC = () => {
                                 type="text"
                                 value={rel.name}
                                 onChange={(e) => updateRelative(idx, 'name', e.target.value)}
-                                placeholder="Họ và tên người thân (không bắt buộc)..."
+                                placeholder="Họ và tên đầy đủ của người thân (điền đúng thì báo cáo chính xác hơn)"
                                 className="w-full py-2.5 px-3.5 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-sm sm:text-base text-white bg-black/35 placeholder:text-white/60"
                               />
                               <p className="text-xs sm:text-sm text-white/75 italic pl-1">
-                                "Bạn cam kết đã được người thân đồng ý khảo sát, không bắt buộc ghi họ và tên chính xác"
+                                "Bạn cam kết đã được người thân đồng ý khảo sát. Họ tên có thể để trống."
                               </p>
                             </div>
                             <input
@@ -1241,14 +1251,14 @@ export const FamilyHappinessMap: React.FC = () => {
                         </div>
                       ))}
 
-                      {formData.relatives.length < 3 && (
+                      {formData.relatives.length < 10 && (
                         <button
                           type="button"
                           onClick={addRelative}
                           className="text-sm sm:text-base font-semibold text-[#FFA877] hover:underline flex items-center gap-1.5 cursor-pointer pt-1"
                         >
                           <Plus className="w-4 h-4" />
-                          <span>Thêm một người thân nữa ({formData.relatives.length}/3)</span>
+                          <span>Thêm một người thân nữa ({formData.relatives.length}/10)</span>
                         </button>
                       )}
                       {errors.relatives && <p className="text-sm text-red-300 font-medium">{errors.relatives}</p>}

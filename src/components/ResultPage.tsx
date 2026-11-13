@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { GOOGLE_SCRIPT_URL } from '../lib/submitToSheet';
 import { buildReport, parseBirthDate, Report, ReportInput, RelativeInput } from '../lib/report';
 import { AREAS, AreaKey } from '../data/lifeWheel';
-import { ZaloPopups, ZaloOpenButton } from './ZaloPopup';
+import { ZaloPopups, ZaloOpenButton, ZALO_GROUP_LINK } from './ZaloPopup';
 
 // ---------- Tra cứu dữ liệu từ Apps Script ----------
 interface LookupRecord {
@@ -35,11 +35,13 @@ function parseRelativesText(text: string): RelativeInput[] {
   return out;
 }
 
-async function fetchRecord(phone: string): Promise<{ record?: LookupRecord; error?: LookupError }> {
+async function fetchRecord(phone: string): Promise<{ record?: LookupRecord; error?: LookupError; gated?: boolean }> {
   try {
     const url = `${GOOGLE_SCRIPT_URL}?action=result&phone=${encodeURIComponent(phone)}`;
     const res = await fetch(url, { method: 'GET' });
     const data = await res.json();
+    // Chưa được quản trị viên duyệt (hoặc bị từ chối): chỉ yêu cầu vào nhóm Zalo, không trả dữ liệu
+    if (data && data.ok && data.approved === false) return { gated: true };
     if (data && data.ok && data.record) return { record: data.record as LookupRecord };
     return { error: (data && data.error) as LookupError || 'notfound' };
   } catch {
@@ -234,6 +236,7 @@ export const ResultPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<LookupError | null>(null);
   const [report, setReport] = useState<Report | null>(null);
+  const [gated, setGated] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -250,6 +253,10 @@ export const ResultPage: React.FC = () => {
     setLoading(true);
     const res = await fetchRecord(p);
     setLoading(false);
+    if (res.gated) {
+      setGated(true);
+      return;
+    }
     if (!res.record) {
       setError(res.error || 'notfound');
       return;
@@ -259,6 +266,7 @@ export const ResultPage: React.FC = () => {
       setError('format');
       return;
     }
+    setGated(false);
     setReport(built);
   };
 
@@ -271,6 +279,53 @@ export const ResultPage: React.FC = () => {
       <div className="relative z-10">{children}</div>
     </div>
   );
+
+  // ----- Chưa được duyệt: cần vào nhóm Zalo -----
+  if (gated && !report) {
+    return shell(
+      <main className="min-h-screen flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md space-y-7 text-center">
+          <div className="space-y-3">
+            <p className={eyebrow}>Dũng Gieo Hạt</p>
+            <h1 className={`text-3xl sm:text-4xl text-white leading-[1.2] ${heading}`}>
+              Vui lòng tham gia nhóm Zalo Gieo Hạt để được nhận kết quả
+            </h1>
+            <p className="text-base text-white/75 leading-relaxed">
+              Cảm ơn bạn đã làm khảo sát. Kết quả của bạn sẽ được mở sau khi bạn vào nhóm Zalo Gieo Hạt và được xác nhận. Bạn vào nhóm rồi quay lại đây kiểm tra sau ít phút nhé.
+            </p>
+          </div>
+          <img
+            src="/assets/zalo-gh3-qr.jpg"
+            alt="Mã QR vào nhóm Zalo Gieo Hạt"
+            width={208}
+            height={208}
+            className="mx-auto h-[208px] w-[208px] rounded-2xl bg-white object-contain p-2"
+          />
+          <a
+            href={ZALO_GROUP_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] py-4 text-base font-bold text-white transition"
+          >
+            Vào nhóm Zalo Gieo Hạt
+          </a>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => submit(e as unknown as React.FormEvent)}
+              disabled={loading}
+              className="text-sm font-semibold text-[#FFB48A] hover:text-white underline underline-offset-4 transition cursor-pointer disabled:opacity-60"
+            >
+              {loading ? 'Đang kiểm tra…' : 'Mình đã vào nhóm, kiểm tra lại'}
+            </button>
+            <button type="button" onClick={() => setGated(false)} className="text-sm text-white/55 hover:text-white transition cursor-pointer">
+              Nhập số điện thoại khác
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // ----- Màn tra cứu -----
   if (!report) {
@@ -325,6 +380,121 @@ const LINK_TONE: Record<string, { label: string; chip: string }> = {
   bothHigh: { label: 'Cùng mạnh, nâng đỡ nhau', chip: 'bg-[#FFD27A]/25 text-[#FFE3AE]' },
 };
 
+// ---------- Liên hệ hỗ trợ & phân tích chuyên sâu cho lĩnh vực trọng yếu ----------
+type Wheel = Report['wheel'];
+
+const SupportCta: React.FC<{ contact: Wheel['contact']; reason: string; subject: string }> = ({ contact, reason, subject }) => (
+  <div className="rounded-2xl bg-[#FA5B13]/20 p-5 sm:p-6 space-y-4">
+    <p className="text-[15px] sm:text-base text-white/90 leading-relaxed">{reason}</p>
+    <p className="text-base sm:text-lg text-white leading-relaxed">
+      <strong className="font-semibold">Liên hệ để có giải pháp nâng cao:</strong> Zalo{' '}
+      <a href={contact.zaloLink} target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-4">{contact.phone}</a>
+      {' '}hoặc email{' '}
+      <a href={`mailto:${contact.email}?subject=${encodeURIComponent(subject)}`} className="font-semibold underline underline-offset-4 whitespace-nowrap">{contact.email}</a>.
+    </p>
+    <div className="flex flex-wrap gap-3">
+      <a href={contact.zaloLink} target="_blank" rel="noopener noreferrer"
+        className="rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] px-6 py-3 text-sm sm:text-base font-bold text-white transition">
+        Nhắn Zalo {contact.phone}
+      </a>
+      <a href={`mailto:${contact.email}?subject=${encodeURIComponent(subject)}`}
+        className="rounded-full bg-white/12 hover:bg-white/20 px-6 py-3 text-sm sm:text-base font-semibold text-white transition">
+        Gửi email
+      </a>
+    </div>
+  </div>
+);
+
+const FocusSection: React.FC<{ w: Wheel }> = ({ w }) => {
+  if (!w.focus.length) return null;
+  const names = w.focus.map((f) => f.label).join(', ');
+  return (
+    <div id="can-chu-y" className="scroll-mt-24 space-y-8">
+      <div className="space-y-3">
+        <p className={eyebrow}>Cần quan tâm đặc biệt</p>
+        <h3 className={`text-2xl sm:text-3xl text-white leading-[1.25] ${heading}`}>
+          {w.focus.length === 1 ? `${names} cần được chăm sóc kỹ hơn` : `${w.focus.length} lĩnh vực cần được chăm sóc kỹ hơn: ${names}`}
+        </h3>
+        <p className="text-[15px] sm:text-base text-white/80 leading-relaxed max-w-[64ch]">
+          Sức khỏe, tài chính và sự nghiệp là ba trụ cột kéo theo phần lớn các lĩnh vực còn lại. Khi một trụ đang dưới 6 điểm hoặc thấp hơn hẳn các lĩnh vực khác, bạn nên xem kỹ phần phân tích dưới đây và có kế hoạch cụ thể cho 90 ngày tới.
+        </p>
+      </div>
+
+      {w.focus.map((f) => (
+        <article key={f.key} className="rounded-3xl bg-white/[0.05] p-5 sm:p-7 space-y-6">
+          <header className="space-y-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h4 className={`text-2xl sm:text-3xl text-white ${heading}`}>{f.label} <span className="text-[#FA5B13]">{f.score}/10</span></h4>
+              <LevelChip tone={f.levelTone} label={f.level} />
+              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80">{f.reason}</span>
+            </div>
+            <p className="text-[15px] sm:text-base text-white/90 leading-relaxed">{f.severity}</p>
+            <p className="text-[15px] sm:text-base text-white/85 leading-relaxed">{f.why}</p>
+          </header>
+
+          <div className="grid sm:grid-cols-2 gap-7">
+            <div className="space-y-3"><Sub>Dấu hiệu thường gặp</Sub><Bullets items={f.signs} tone="care" /></div>
+            <div className="space-y-3"><Sub>Nguyên nhân thường gặp</Sub><Bullets items={f.causes} tone="care" /></div>
+          </div>
+
+          <div className="space-y-3">
+            <Sub>Lĩnh vực này đang kéo theo điều gì</Sub>
+            <Bullets items={f.ripples} />
+            {f.linked.length > 0 && (
+              <ul className="space-y-2 pt-1">
+                {f.linked.map((r) => (
+                  <li key={r.label} className="text-[15px] text-white/85 leading-relaxed">
+                    <span className="font-semibold text-[#FFA877]">Trong bánh xe của bạn, với {r.label} ({r.score}/10): </span>{r.text}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {f.alsoLow.length > 0 && (
+              <p className="text-[15px] text-white/85 leading-relaxed">
+                <span className="font-semibold text-[#FFA877]">Lưu ý: </span>
+                {f.alsoLow.map((a) => `${a.label} (${a.score}/10)`).join(', ')} cũng đang thấp, nên các lĩnh vực này có thể đang kéo nhau xuống. Hãy xử lý theo thứ tự ưu tiên thay vì làm tất cả cùng lúc.
+              </p>
+            )}
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-5">
+            <Pair label="Góc nhìn thần số học" text={f.lpView} />
+            <Pair label="Gợi ý theo bản mệnh" text={f.hanhTip} />
+          </div>
+
+          <div className="space-y-4">
+            <Sub>Kế hoạch 90 ngày</Sub>
+            <ol className="space-y-4">
+              {f.plan.map((ph) => (
+                <li key={ph.title} className="space-y-2">
+                  <p className="text-base font-semibold text-white">{ph.title}</p>
+                  <Bullets items={ph.items} />
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="space-y-3">
+            <Sub>Sai lầm nên tránh</Sub>
+            <Bullets items={f.mistakes} tone="care" />
+          </div>
+
+          <SupportCta contact={w.contact} reason={f.contactReason} subject={`Tư vấn nâng cao: ${f.label} (${f.score}/10)`} />
+          <p className="text-xs text-white/45 leading-relaxed">{f.caution}</p>
+        </article>
+      ))}
+
+      {w.focus.length > 1 && (
+        <SupportCta
+          contact={w.contact}
+          reason={`Bạn đang có ${w.focus.length} lĩnh vực trọng yếu cần chú ý cùng lúc (${names}). Một kế hoạch tổng thể, sắp xếp đúng thứ tự ưu tiên, sẽ hiệu quả và nhẹ nhàng hơn nhiều so với tự xử lý từng việc riêng lẻ.`}
+          subject={`Tư vấn nâng cao: ${names}`}
+        />
+      )}
+    </div>
+  );
+};
+
 // ---------- Báo cáo ----------
 const NAV = [
   ['tong-quan', 'Tổng quan'],
@@ -341,6 +511,7 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
   const t = r.tuvi;
   const w = r.wheel;
 
+  const navItems = r.wheel.focus.length ? [...NAV.slice(0, 4), ['can-chu-y', 'Cần chú ý'], ...NAV.slice(4)] : NAV;
   const palaceLines = useMemo(() => (t.chart ? t.chart.palaces.filter((p) => p.lines.length) : []), [t.chart]);
 
   return (
@@ -348,7 +519,7 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
       <nav className="sticky top-0 z-30 bg-[#0d0f14]/85 backdrop-blur-md">
         <div className="max-w-3xl mx-auto px-4 sm:px-8 h-14 flex items-center gap-1 overflow-x-auto">
           <span className={`mr-3 shrink-0 text-lg text-white ${heading}`}>Dũng Gieo Hạt</span>
-          {NAV.map(([id, label]) => (
+          {navItems.map(([id, label]) => (
             <a key={id} href={`#${id}`} className="shrink-0 px-3 py-1.5 rounded-full text-sm text-white/70 hover:text-white hover:bg-white/10 transition">
               {label}
             </a>
@@ -371,6 +542,18 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
             ))}
           </div>
           <p className="text-base sm:text-lg text-white/80 leading-relaxed max-w-[62ch]">{r.lead}</p>
+          {r.wheel.focus.length > 0 && (
+            <div className="rounded-2xl bg-[#FA5B13]/20 p-5 sm:p-6 space-y-3 max-w-[64ch]">
+              <p className="text-base sm:text-lg text-white leading-relaxed">
+                <strong className="font-semibold">Cần chú ý: </strong>
+                bánh xe cuộc đời của bạn có {r.wheel.focus.length} lĩnh vực trọng yếu cần chăm sóc kỹ hơn:{' '}
+                {r.wheel.focus.map((f) => `${f.label} (${f.score}/10)`).join(', ')}.
+              </p>
+              <a href="#can-chu-y" className="inline-block text-sm sm:text-base font-semibold text-[#FFB48A] hover:text-white underline underline-offset-4 transition">
+                Xem phân tích kỹ và cách liên hệ hỗ trợ &rarr;
+              </a>
+            </div>
+          )}
           <div className="flex flex-wrap gap-3 pt-2">
             <button onClick={() => window.print()} className="rounded-full bg-white/10 hover:bg-white/15 px-5 py-2.5 text-sm font-semibold transition cursor-pointer">
               In / lưu thành PDF
@@ -674,6 +857,8 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
             </ul>
           </div>
 
+          <FocusSection w={w} />
+
           {/* Hình dạng bánh xe */}
           <div className="space-y-3">
             <Sub>Hình dạng bánh xe của bạn</Sub>
@@ -808,27 +993,136 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
         </Section>
 
         {/* GIA ĐÌNH */}
-        <Section id="gia-dinh" label="Phần 4" title="Gia đình" intro={r.family.familyTimeText}>
+        <Section id="gia-dinh" label="Phần 4" title="Gia đình" intro={`${r.family.familyTimeText} ${r.family.scoreNote}`}>
           {r.family.members.length === 0 ? (
-            <p className="text-[15px] text-white/70 leading-relaxed">Bạn chưa khai thông tin người thân nên phần so sánh hòa hợp chưa được lập. Khi có thông tin, bạn có thể bổ sung để nhận phân tích chi tiết.</p>
+            <p className="text-[15px] text-white/70 leading-relaxed">Bạn chưa khai thông tin người thân nên phần phân tích từng người chưa được lập. Khi có thông tin (tối đa 10 người), mỗi người sẽ có một phần báo cáo riêng, nối với thần số học và bánh xe cuộc đời của bạn.</p>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-10">
+              {/* Tổng hợp cả gia đình */}
+              {r.family.summary && (
+                <div className={`${soft} space-y-3`}>
+                  <p className={eyebrow}>Tổng hợp {r.family.summary.total} người thân</p>
+                  <ul className="space-y-2 text-[15px] sm:text-base text-white/85 leading-relaxed">
+                    <li><span className="font-semibold text-[#FFA877]">Hòa hợp nhất với bạn: </span>{r.family.summary.mostHarmonious}.</li>
+                    <li><span className="font-semibold text-[#FFA877]">Cần nhiều kiên nhẫn và thấu hiểu nhất: </span>{r.family.summary.mostChallenging}.</li>
+                    {r.family.summary.sameLifePath.map((t) => (<li key={t}><span className="font-semibold text-[#FFA877]">Điểm chung: </span>{t}.</li>))}
+                    <li><span className="font-semibold text-[#FFA877]">Hành nổi bật của gia đình: </span>{r.family.summary.commonHanh}.</li>
+                  </ul>
+                  <ul className="pt-2 space-y-1.5">
+                    {r.family.members.map((m, i) => (
+                      <li key={i} className="flex flex-wrap items-center justify-between gap-2 text-sm sm:text-base">
+                        <span className="text-white/90">{m.name} <span className="text-white/50">· {m.relationship}</span></span>
+                        <span className="text-white/60">Số {m.lifePath} · {m.napAm} · <span className="font-semibold text-white">{m.overallLabel}</span></span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Báo cáo chi tiết từng người */}
               {r.family.members.map((m, i) => (
-                <article key={i} className={`${soft} space-y-4`}>
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className={`text-2xl text-white ${heading}`}>{m.name} <span className="text-base text-white/55">· {m.relationship}</span></p>
-                    <span className="rounded-full bg-[#FA5B13]/25 px-3 py-1 text-sm font-semibold text-white">{m.overallLabel}</span>
+                <article key={i} className="space-y-6">
+                  <header className="space-y-2">
+                    <p className={eyebrow}>Người thân {i + 1}/{r.family.members.length} · {m.roleLabel}</p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <h3 className={`text-3xl sm:text-4xl text-white ${heading}`}>{m.name}</h3>
+                      <span className="rounded-full bg-[#FA5B13]/25 px-3 py-1 text-sm font-semibold text-white">{m.overallLabel}</span>
+                    </div>
+                    <p className="text-sm text-white/60">
+                      {m.relationship} · {m.canChi} · {m.napAm} · số chủ đạo {m.lifePath}{m.age !== null ? ` · ${m.age} tuổi (${m.stage.label.toLowerCase()})` : ''}
+                    </p>
+                    <p className="text-[15px] sm:text-base text-white/85 leading-relaxed">{m.overallText}</p>
+                  </header>
+
+                  {!m.hasName && (
+                    <p className="text-sm text-white/60 leading-relaxed">Bạn chưa điền họ tên của {m.name} nên các chỉ số từ tên (sứ mệnh, linh hồn, nhân cách) chưa được tính. Điền đúng họ tên khai sinh thì báo cáo sẽ chính xác hơn.</p>
+                  )}
+
+                  {/* Thần số học */}
+                  <div className={`${soft} space-y-4`}>
+                    <p className={eyebrow}>Thần số học</p>
+                    <p className={`text-xl sm:text-2xl text-white ${heading}`}>Số chủ đạo {m.lifePath} · {m.profile.lpTitle}</p>
+                    <p className="text-sm text-white/55">{m.profile.keywords.join(' · ')}</p>
+                    <p className="text-[15px] text-white/85 leading-relaxed">{m.profile.essence}</p>
+                    <div className="grid sm:grid-cols-2 gap-6">
+                      <div className="space-y-2"><Sub>Điểm mạnh</Sub><Bullets items={m.profile.strengths} /></div>
+                      <div className="space-y-2"><Sub>Điều cần lưu ý</Sub><Bullets items={m.profile.challenges} tone="care" /></div>
+                    </div>
+                    {m.nameNumbers.length > 0 && (
+                      <div className="grid sm:grid-cols-3 gap-5 pt-1">
+                        {m.nameNumbers.map((nn) => (
+                          <div key={nn.label}>
+                            <p className="text-sm font-semibold text-[#FFA877]">{nn.label}: {nn.value}</p>
+                            <p className="mt-1 text-[15px] text-white/85 leading-relaxed">{nn.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[15px] text-white/85 leading-relaxed"><span className="text-[#FFA877] font-semibold">Năm {r.numerology.cycles.year} của {m.name}: </span>{m.year.title}. {m.year.theme} {m.year.help}</p>
                   </div>
-                  <p className="text-sm text-white/60">{m.canChi} · {m.napAm} · số chủ đạo {m.lifePath}{m.age !== null ? ` · ${m.age} tuổi` : ''}</p>
-                  <p className="text-[15px] text-white/85 leading-relaxed">{m.overallText}</p>
-                  <div className="grid sm:grid-cols-3 gap-5">
-                    <Pair label={m.chiRel.label} text={m.chiRel.text} />
-                    <Pair label={m.hanhRel.label} text={m.hanhRel.text} />
-                    <Pair label={m.lpCompat.label} text={m.lpCompat.text} />
+
+                  {/* Tử vi */}
+                  <div className="space-y-3">
+                    <Sub>Tử vi & bản mệnh</Sub>
+                    <p className="text-[15px] text-white/85 leading-relaxed"><span className="font-semibold text-white">Tuổi {m.tuvi.animal}: </span>{m.tuvi.chiPersonality}</p>
+                    <p className="text-[15px] text-white/85 leading-relaxed"><span className="font-semibold text-white">{m.napAm} ({m.tuvi.napAmImage}): </span>{m.tuvi.napAmText}</p>
+                    <p className="text-[15px] text-white/85 leading-relaxed">{m.tuvi.hanhTrait}</p>
+                    <p className="text-sm text-white/60 leading-relaxed">{m.tuvi.colors}</p>
                   </div>
-                  <p className="text-[15px] text-white/85 leading-relaxed"><span className="text-[#FFA877] font-semibold">Gợi ý: </span>{m.roleTip}</p>
+
+                  {/* Hòa hợp với bạn */}
+                  <div className="space-y-4">
+                    <Sub>Mức hòa hợp với bạn</Sub>
+                    <div className="grid sm:grid-cols-3 gap-5">
+                      <Pair label={m.chiRel.label} text={m.chiRel.text} />
+                      <Pair label={m.hanhRel.label} text={m.hanhRel.text} />
+                      <Pair label={m.lpCompat.label} text={m.lpCompat.text} />
+                    </div>
+                  </div>
+
+                  {/* Nối với bánh xe cuộc đời */}
+                  {m.wheelLinks.length > 0 && (
+                    <div className="space-y-4">
+                      <Sub>Liên hệ với bánh xe cuộc đời của bạn</Sub>
+                      <ul className="space-y-4">
+                        {m.wheelLinks.map((w2) => (
+                          <li key={w2.title} className="space-y-1.5">
+                            <p className="text-sm font-semibold text-[#FFA877]">{w2.title}</p>
+                            <p className="text-[15px] text-white/85 leading-relaxed">{w2.text}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Cách đồng hành */}
+                  <div className="space-y-4">
+                    <Sub>Cách đồng hành cùng {m.name}</Sub>
+                    <div className="grid sm:grid-cols-2 gap-x-8 gap-y-5">
+                      <Pair label="Cách trò chuyện" text={m.howTo.talk} />
+                      <Pair label="Điều họ cần được ghi nhận" text={m.howTo.appreciate} />
+                      <Pair label="Điều dễ gây va chạm" text={m.howTo.conflict} />
+                      <Pair label={`Ở giai đoạn ${m.stage.label.toLowerCase()}`} text={m.stage.tip} />
+                    </div>
+                    <p className="text-[15px] text-white/85 leading-relaxed"><span className="text-[#FFA877] font-semibold">Với vai trò {m.roleLabel.toLowerCase()}: </span>{m.roleTip}</p>
+                  </div>
                 </article>
               ))}
+
+              {/* Kế hoạch gia đình */}
+              {r.family.plan.length > 0 && (
+                <div className="space-y-5">
+                  <Sub>Kế hoạch gia đình 30 ngày</Sub>
+                  <ol className="space-y-6">
+                    {r.family.plan.map((wk) => (
+                      <li key={wk.title} className="space-y-3">
+                        <p className={`text-xl text-white ${heading}`}>{wk.title}</p>
+                        <Bullets items={wk.items} />
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
             </div>
           )}
         </Section>
@@ -850,7 +1144,7 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
           <p className="text-[15px] text-white/75 leading-relaxed">{r.plan.yearNote}</p>
         </Section>
 
-        {/* Bước cuối: cửa sổ vào nhóm Zalo GH3 (tự mở khi đọc đến cuối trang) */}
+        {/* Bước cuối: cửa sổ vào nhóm Zalo Gieo Hạt (tự mở khi đọc đến cuối trang) */}
         <div className="text-center"><ZaloOpenButton /></div>
         <ZaloPopups />
 

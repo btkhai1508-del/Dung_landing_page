@@ -9,9 +9,10 @@ import { FamilyHappinessMap } from './components/FamilyHappinessMap';
 import { AffiliateLandingPage } from './components/AffiliateLandingPage';
 import { AffiliateHomePage } from './components/AffiliateHomePage';
 // Trang kết quả chứa kho dữ liệu lớn → chỉ tải khi người dùng mở /ketqua
+const AdminPage = lazy(() => import('./components/AdminPage').then((m) => ({ default: m.AdminPage })));
 const ResultPage = lazy(() => import('./components/ResultPage').then((m) => ({ default: m.ResultPage })));
 
-type Route = 'home' | 'bando' | 'affiliate' | 'affiliate-home' | 'ketqua';
+type Route = 'home' | 'bando' | 'affiliate' | 'affiliate-home' | 'ketqua' | 'admin';
 
 // Hàm kiểm tra route độc lập theo link URL
 function getRouteFromLocation(): Route {
@@ -19,6 +20,9 @@ function getRouteFromLocation(): Route {
   const path = window.location.pathname.toLowerCase();
   const search = window.location.search.toLowerCase();
   const hash = window.location.hash.toLowerCase();
+
+  // Trang quản trị duyệt kết quả: /admin
+  if (path === '/admin' || path.startsWith('/admin/') || path === '/quan-tri') return 'admin';
 
   // Trang tra cứu kết quả: /ketqua, #ketqua, ?ketqua
   if (path.includes('/ketqua') || path.includes('/ket-qua') || hash.includes('ketqua') || search.includes('ketqua')) return 'ketqua';
@@ -74,7 +78,11 @@ export default function App() {
   return (
     <div className="w-full min-h-screen">
       {/* Các trang tách biệt hoàn toàn độc lập, hiển thị chính xác theo link URL */}
-      {currentRoute === 'ketqua' ? (
+      {currentRoute === 'admin' ? (
+        <Suspense fallback={<div className="min-h-screen bg-[#0d0f14]" />}>
+          <AdminPage />
+        </Suspense>
+      ) : currentRoute === 'ketqua' ? (
         <Suspense fallback={<div className="min-h-screen bg-[#0d0f14]" />}>
           <ResultPage />
         </Suspense>

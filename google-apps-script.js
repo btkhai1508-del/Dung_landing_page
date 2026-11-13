@@ -7,11 +7,14 @@
  * 3) Sau khi người dùng hoàn thành khảo sát /bando, hệ thống gửi 1 email kèm mã
  *    tra cứu SAU 30 PHÚT (hàng đợi + trigger mỗi 5 phút).
  * 4) Trang /ketqua gọi doGet?action=result&phone=... (chỉ cần số điện thoại) để lấy dữ liệu người dùng.
+ *    Kết quả chỉ mở cho số đã được QUẢN TRỊ VIÊN DUYỆT (cột "Duyệt" = Đã duyệt); chưa duyệt hoặc bị từ chối thì web yêu cầu vào nhóm Zalo.
+ *    Trang /admin dùng doGet?action=adminlist / setstatus (cần khóa quản trị ADMIN_KEY trong Script properties).
  *    Mỗi số điện thoại chỉ làm khảo sát /bando một lần: doGet?action=checkphone&phone=... báo số đã tồn tại.
  *
  * SAU KHI DÁN CODE NÀY:
  *   a. Chạy hàm setupTriggers() MỘT LẦN trong trình soạn thảo (cấp quyền khi được hỏi).
  *   b. Deploy → Manage deployments → Edit → New version → Deploy.
+ *   b2. Project Settings → Script properties → thêm ADMIN_KEY = mật khẩu quản trị (dùng cho trang /admin).
  *   c. Điền RESULT_PAGE_URL bên dưới (địa chỉ trang kết quả, ví dụ https://tenmien.com/ketqua).
  * ==============================================================================
  */
@@ -24,6 +27,8 @@ const MAIL_DELAY_MINUTES = 30;       // gửi email sau khi hoàn thành khảo 
 const MAIL_PREFIX = "mail_";
 const EMAIL_SENT_HEADER = "Email đã gửi lúc";
 const TZ = "Asia/Ho_Chi_Minh";
+const APPROVE_HEADER = "Duyệt";   // cột duyệt: "Đã duyệt" / "Từ chối" / để trống = chờ duyệt
+const APPROVED_WORDS = ["✓", "✔", "☑", "da duyet", "duyet", "ok", "yes", "true", "1"];
 
 function jsonOut(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -36,6 +41,8 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   if (p.action === "result") return jsonOut(lookupResult(p.phone));
   if (p.action === "checkphone") return jsonOut(checkPhone(p.phone));
+  if (p.action === "adminlist") return jsonOut(adminList(p.key));
+  if (p.action === "setstatus") return jsonOut(adminSet(p.key, p.row, p.phone, p.status));
   return jsonOut({ status: "ready", message: "Webhook Dũng Gieo Hạt đang hoạt động bình thường!" });
 }
 
@@ -342,6 +349,12 @@ function lookupResult(phoneRaw) {
   const col = (name) => headers.indexOf(normalizeName(name));
   const row = values[rowNo - 1];
   const val = (name) => { const i = col(name); return i < 0 ? "" : cellText(row[i]); };
+  // Chỉ số điện thoại đã được quản trị viên duyệt mới xem được báo cáo
+  const status = statusOf(val(APPROVE_HEADER));
+  if (status !== "approved") {
+    cache.remove(tryKey);
+    return { ok: true, approved: false, status: status };
+  }
   let extra = {};
   try { extra = JSON.parse(val("Dữ liệu báo cáo") || "{}"); } catch (err) {}
 
@@ -349,6 +362,7 @@ function lookupResult(phoneRaw) {
   cache.remove(tryKey);
   return {
     ok: true,
+    approved: true,
     record: {
       code: normalizeCode(val(CODE_HEADER)),
       name: val("Họ Và Tên"),
@@ -373,6 +387,92 @@ function lookupResult(phoneRaw) {
     },
   };
 }
+// ----------------------------------------------------------------------------
+// DUYỆT & QUẢN TRỊ (trang /admin)
+// ----------------------------------------------------------------------------
+function isApproved(v) {
+  const raw = String(v === null || v === undefined ? "" : v).trim();
+  return APPROVED_WORDS.indexOf(raw) >= 0 || APPROVED_WORDS.indexOf(normalizeName(raw)) >= 0;
+}
+// "approved" | "pending" (để trống) | "rejected" (ghi gì đó khác, ví dụ "Từ chối", "x")
+function statusOf(v) {
+  if (isApproved(v)) return "approved";
+  return String(v === null || v === undefined ? "" : v).trim() === "" ? "pending" : "rejected";
+}
+
+// Khóa quản trị lưu trong Script properties (ADMIN_KEY); sai quá 20 lần/giờ thì khóa tạm
+function checkAdmin(key) {
+  const cache = CacheService.getScriptCache();
+  const fails = Number(cache.get("admin_fail") || "0");
+  if (fails >= 20) return "locked";
+  const real = PropertiesService.getScriptProperties().getProperty("ADMIN_KEY");
+  if (!real) return "nokey";
+  if (String(key || "") !== real) {
+    cache.put("admin_fail", String(fails + 1), 3600);
+    return "bad";
+  }
+  return "ok";
+}
+
+function adminList(key) {
+  const auth = checkAdmin(key);
+  if (auth !== "ok") return { ok: false, error: auth };
+  const sheet = getBandoSheet();
+  if (!sheet || sheet.getLastRow() < 2) return { ok: true, rows: [], total: 0 };
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map((h) => normalizeName(h));
+  const col = (name) => headers.indexOf(normalizeName(name));
+  const cCode = col(CODE_HEADER), cTime = col("Thời Gian"), cName = col("Họ Và Tên"), cPhone = col("SĐT"),
+    cEmail = col("Email"), cStatus = col(APPROVE_HEADER);
+  const get = (r, c) => (c < 0 ? "" : cellText(r[c]));
+  const rows = [];
+  // mới nhất lên đầu, tối đa 2000 dòng
+  for (let r = values.length - 1; r >= 1 && rows.length < 2000; r--) {
+    const row = values[r];
+    if (!get(row, cPhone)) continue;
+    rows.push({
+      row: r + 1,
+      code: get(row, cCode),
+      time: get(row, cTime),
+      name: get(row, cName),
+      phone: get(row, cPhone),
+      email: get(row, cEmail),
+      status: statusOf(get(row, cStatus)),
+    });
+  }
+  return { ok: true, rows: rows, total: rows.length };
+}
+
+function adminSet(key, rowNoRaw, phoneRaw, status) {
+  const auth = checkAdmin(key);
+  if (auth !== "ok") return { ok: false, error: auth };
+  if (["approved", "rejected", "pending"].indexOf(status) < 0) return { ok: false, error: "bad_status" };
+  const sheet = getBandoSheet();
+  const rowNo = Number(rowNoRaw);
+  if (!sheet || !rowNo || rowNo < 2 || rowNo > sheet.getLastRow()) return { ok: false, error: "bad_row" };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0].map((h) => normalizeName(h));
+    const cPhone = headers.indexOf(normalizeName("SĐT"));
+    // đối chiếu số điện thoại để chắc chắn không sửa nhầm dòng (danh sách có thể đã cũ)
+    if (cPhone < 0 || normalizePhone(values[rowNo - 1][cPhone]) !== normalizePhone(phoneRaw)) return { ok: false, error: "row_changed" };
+    let c = headers.indexOf(normalizeName(APPROVE_HEADER));
+    if (c < 0) {
+      c = headers.findIndex((h, i) => h === "" && !values.some((r, ri) => ri > 0 && !isBlank(r[i])));
+      if (c < 0) c = values[0].length;
+      sheet.getRange(1, c + 1).setValue(APPROVE_HEADER);
+    }
+    const label = status === "approved" ? "Đã duyệt" : status === "rejected" ? "Từ chối" : "";
+    sheet.getRange(rowNo, c + 1).setValue(label ? "'" + label : "");
+    return { ok: true, row: rowNo, status: status };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function splitList(s) { return String(s || "").split(/,\s*/).map((x) => x.trim()).filter(Boolean); }
 function failLookup(cache, tryKey, tries, globalTries) {
   cache.put(tryKey, String(tries + 1), 3600);
@@ -540,6 +640,7 @@ function sendResultEmail(job) {
   '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">' +
     step(1, 'Mở trang kết quả', step1) +
     step(2, 'Nhập số điện thoại', 'Số điện thoại ' + escapeHtml(phoneHint) + ' bạn đã dùng khi điền khảo sát, rồi bấm xem để mở báo cáo của riêng bạn.') +
+    step(3, 'Tham gia nhóm Zalo Gieo Hạt', 'Kết quả được mở sau khi bạn tham gia nhóm Zalo Gieo Hạt và được xác nhận. Nếu trang báo cần tham gia nhóm, hãy vào nhóm rồi thử lại sau ít phút.') +
   '</table>' + button +
 '</td></tr>' +
 
@@ -579,7 +680,8 @@ function sendResultEmail(job) {
     "MÃ ĐĂNG KÝ CỦA BẠN: " + code + "\n\n" +
     "Cách xem kết quả:\n" +
     "1. Mở trang kết quả" + (hasUrl ? ": " + RESULT_PAGE_URL : " trên website (đường dẫn kết thúc bằng /ketqua)") + "\n" +
-    "2. Nhập số điện thoại " + phoneHint + " bạn đã đăng ký\n\n" +
+    "2. Nhập số điện thoại " + phoneHint + " bạn đã đăng ký\n" +
+    "3. Kết quả được mở sau khi bạn tham gia nhóm Zalo Gieo Hạt và được xác nhận\n\n" +
     "Hãy lưu lại email này.\n— " + BRAND_NAME;
 
   GmailApp.sendEmail(job.to, subject, plain, { htmlBody: html, name: BRAND_NAME });

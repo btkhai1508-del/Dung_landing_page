@@ -9,11 +9,47 @@ export const isoToVN = (iso: string) => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || '';
 };
 
-const formatDigits = (raw: string) => {
-  const d = raw.replace(/\D/g, '').slice(0, 8);
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
-  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+/**
+ * Định dạng khi gõ thành dd/mm/yyyy và tự thêm số 0:
+ *  - ngày bắt đầu bằng 4–9 hoặc tháng bắt đầu bằng 2–9 chỉ có thể là 1 chữ số → "9" thành "09/";
+ *  - gõ dấu phân cách (/ - . hoặc cách) sau 1 chữ số → "1/" thành "01/".
+ * Khi người dùng đang xóa (backspace) thì không tự thêm dấu "/" ở cuối.
+ */
+export const formatTyped = (raw: string, deleting = false): string => {
+  let day = '';
+  let month = '';
+  let year = '';
+  let stage = 0;
+  for (const c of raw) {
+    if (/\d/.test(c)) {
+      if (stage === 0) {
+        day += c;
+        if (day.length === 1 && Number(c) > 3) {
+          day = '0' + c;
+          stage = 1;
+        } else if (day.length === 2) stage = 1;
+      } else if (stage === 1) {
+        month += c;
+        if (month.length === 1 && Number(c) > 1) {
+          month = '0' + c;
+          stage = 2;
+        } else if (month.length === 2) stage = 2;
+      } else if (year.length < 4) {
+        year += c;
+      }
+    } else if (stage === 0 && day.length === 1) {
+      day = '0' + day;
+      stage = 1;
+    } else if (stage === 1 && month.length === 1) {
+      month = '0' + month;
+      stage = 2;
+    }
+  }
+  let out = day;
+  if (stage >= 1) out += '/' + month;
+  if (stage >= 2) out += '/' + year;
+  if (deleting && out.endsWith('/')) out = out.slice(0, -1);
+  return out;
 };
 
 const toValue = (text: string) => {
@@ -52,7 +88,7 @@ export const BirthDateInput: React.FC<BirthDateInputProps> = ({ value, onChange,
       maxLength={10}
       value={text}
       onChange={(e) => {
-        const next = formatDigits(e.target.value);
+        const next = formatTyped(e.target.value, e.target.value.length < text.length);
         setText(next);
         onChange(toValue(next));
       }}
