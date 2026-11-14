@@ -26,7 +26,6 @@ interface FormData {
   birthDate: string;
   birthTime: string;
   gender: 'Nam' | 'Nữ' | '';
-  city: string;
   occupation: string;
 
   // Trang 3: Gia đình
@@ -78,7 +77,6 @@ const INITIAL_DATA: FormData = {
   birthDate: '',
   birthTime: '',
   gender: '',
-  city: '',
   occupation: '',
   familyTime: '',
   includeRelatives: false,
@@ -248,6 +246,19 @@ export const FamilyHappinessMap: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentStep, isCompleted, isPrivacyStep]);
 
+  // Có ô bắt buộc chưa điền / sai → tự cuộn tới đúng chỗ đó (và đặt con trỏ vào ô nhập)
+  useEffect(() => {
+    if (!Object.keys(errors).length && !privacyError && !phoneDuplicate) return;
+    const t = window.setTimeout(() => {
+      const el = document.querySelector<HTMLElement>('[data-error], p.text-red-300');
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const field = el.parentElement?.querySelector<HTMLElement>('input:not([type=checkbox]), select, textarea');
+      field?.focus({ preventScroll: true });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [errors, privacyError, phoneDuplicate]);
+
   const headingClass = 'font-playfair-heading italic font-medium';
 
   const validateStep = (step: number): boolean => {
@@ -258,7 +269,6 @@ export const FamilyHappinessMap: React.FC = () => {
       else if (birthDateError(formData.birthDate)) errs.birthDate = birthDateError(formData.birthDate)!;
       if (formData.birthTime && !isValidTime24(formData.birthTime)) errs.birthTime = 'Giờ sinh chưa đúng. Hãy nhập theo giờ 24h, ví dụ 17:45, hoặc xóa trống nếu không nhớ.';
       if (!formData.gender) errs.gender = 'Vui lòng chọn giới tính';
-      if (!formData.city.trim()) errs.city = 'Vui lòng nhập tỉnh/thành phố';
       if (!formData.occupation.trim()) errs.occupation = 'Vui lòng nhập công việc hiện tại';
     }
 
@@ -371,6 +381,8 @@ export const FamilyHappinessMap: React.FC = () => {
     e?.preventDefault();
     if (!privacyConsent) {
       setPrivacyError('Vui lòng tích chọn đồng ý với Quyền riêng tư trước khi gửi.');
+      // bấm lại khi lỗi đã hiện sẵn: vẫn cuộn xuống ô đồng ý
+      window.setTimeout(() => document.querySelector('[data-error]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
       return;
     }
     // Kiểm tra lại toàn bộ các bước; nếu có chỗ chưa hợp lệ thì đưa người dùng về đúng bước đó
@@ -440,7 +452,6 @@ export const FamilyHappinessMap: React.FC = () => {
           'Ngày sinh': isoToVN(formData.birthDate),
           'Giờ sinh': formData.birthTime || 'Không rõ',
           'Giới tính': formData.gender,
-          'Tỉnh thành': formData.city.trim(),
           'Nghề nghiệp': formData.occupation.trim(),
           'Số chủ đạo': String(lifePath),
           'Năm Can Chi': tuViData.canChiNam,
@@ -701,7 +712,6 @@ export const FamilyHappinessMap: React.FC = () => {
                   ['Giới tính', formData.gender],
                   ['Ngày sinh', isoToVN(formData.birthDate)],
                   ['Giờ sinh', formData.birthTime || 'Không rõ'],
-                  ['Nơi sinh sống', formData.city || 'Chưa cập nhật'],
                   ['Nghề nghiệp', formData.occupation || 'Chưa cập nhật'],
                   ['Zalo', formData.phone],
                   ['Email', formData.email || 'Không có'],
@@ -852,11 +862,11 @@ export const FamilyHappinessMap: React.FC = () => {
                 <div className="space-y-4 py-5 border-y border-white/15 text-base sm:text-lg text-white">
                   <div className="flex items-start gap-3">
                     <span className="text-[#FA5B13] font-bold text-lg leading-none mt-1">•</span>
-                    <span><strong>Bánh xe hạnh phúc:</strong> Đo lường 8 khía cạnh cốt lõi trong đời sống hiện tại và giải pháp thay đổi để hạnh phúc hơn</span>
+                    <span><strong>Tử vi & Thần số học:</strong> Nhận diện tần số năng lượng và bài học cuộc đời theo ngày sinh.</span>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-[#FA5B13] font-bold text-lg leading-none mt-1">•</span>
-                    <span><strong>Tử vi & Thần số học:</strong> Nhận diện tần số năng lượng và bài học cuộc đời theo ngày sinh.</span>
+                    <span><strong>Bánh xe hạnh phúc:</strong> Đo lường 8 khía cạnh cốt lõi trong đời sống hiện tại và giải pháp thay đổi để hạnh phúc hơn</span>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-[#FA5B13] font-bold text-lg leading-none mt-1">•</span>
@@ -951,7 +961,7 @@ export const FamilyHappinessMap: React.FC = () => {
                       Tôi đã đọc, hiểu rõ và đồng ý cho phép thu thập, xử lý thông tin cá nhân theo đúng Chính sách Quyền riêng tư nêu trên.
                     </span>
                   </label>
-                  {privacyError && <p className="text-sm text-red-300 font-semibold pl-8">{privacyError}</p>}
+                  {privacyError && <p data-error className="text-sm text-red-300 font-semibold pl-8">{privacyError}</p>}
                 </div>
 
                 {/* Nút điều hướng */}
@@ -987,11 +997,8 @@ export const FamilyHappinessMap: React.FC = () => {
             {currentStep === 1 && !isPrivacyStep && (
               <div key="step-2" className="space-y-8 animate-fade border-t border-white/15 pt-8">
                 <div className="space-y-2.5">
-                  <span className="text-xs sm:text-sm font-bold text-[#FFA877] uppercase tracking-widest block">
-                    THÔNG TIN CÁ NHÂN
-                  </span>
                   <h2 className={`text-2xl sm:text-4xl text-white ${headingClass} [text-wrap:balance]`}>
-                    Một Chút Về Bạn
+                    Thông tin cá nhân
                   </h2>
                   <p className="text-base text-white pt-1 font-normal">
                     Ngày tháng năm sinh giúp AI tính toán chính xác phần Tử vi và Thần số học riêng cho bạn.
@@ -1074,25 +1081,10 @@ export const FamilyHappinessMap: React.FC = () => {
                     {errors.gender && <p className="text-sm text-red-300 font-medium">{errors.gender}</p>}
                   </div>
 
-                  {/* Tỉnh thành */}
-                  <div className="space-y-2 pt-1">
-                    <label className="block text-base sm:text-lg font-semibold text-white">
-                      5. Tỉnh/Thành phố đang sinh sống <span className="text-[#FA5B13]">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      placeholder="Hà Nội, TP. Hồ Chí Minh, Đà Nẵng..."
-                      className="w-full py-3 sm:py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white transition-all bg-black/35 backdrop-blur-xs placeholder:text-white/60"
-                    />
-                    {errors.city && <p className="text-sm text-red-300 font-medium">{errors.city}</p>}
-                  </div>
-
                   {/* Công việc */}
                   <div className="space-y-2 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white">
-                      6. Bạn hiện đang làm công việc gì? <span className="text-[#FA5B13]">*</span>
+                      5. Bạn hiện đang làm công việc gì? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <input
                       type="text"
@@ -1126,7 +1118,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 7 */}
                   <div className="space-y-3">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      7. Gia đình bạn có thường xuyên dành thời gian chất lượng cùng nhau không? <span className="text-[#FA5B13]">*</span>
+                      6. Gia đình bạn có thường xuyên dành thời gian chất lượng cùng nhau không? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                       {['Thường xuyên', 'Thỉnh thoảng', 'Hiếm khi', 'Gần như không'].map((opt) => (
@@ -1150,7 +1142,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 8: Khai báo người thân */}
                   <div className="space-y-3 pt-3 border-t border-white/15">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      8. Bạn có muốn nhận thêm gợi ý kết nối cho những người thân đang sống cùng không? <span className="text-[#FA5B13]">*</span>
+                      7. Bạn có muốn nhận thêm gợi ý kết nối cho những người thân đang sống cùng không? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <p className="text-base text-white font-normal">
                       Mỗi người chỉ cần 4 thông tin ngắn. Tối đa 10 người thân trong gia đình (vợ/chồng, con, cha/mẹ, anh chị em, ông bà…). Mỗi người sẽ có một phần báo cáo chi tiết riêng.
@@ -1297,7 +1289,7 @@ export const FamilyHappinessMap: React.FC = () => {
                     Hãy tự cảm nhận mức độ hài lòng hiện tại của bạn từ 1 (rất chưa hài lòng) đến 10 (rất hài lòng).
                   </p>
                   {errors.wheelScores && (
-                    <div className="p-3.5 rounded-xl bg-red-500/25 border border-red-500/50 text-red-200 text-sm sm:text-base font-semibold mt-2">
+                    <div data-error className="p-3.5 rounded-xl bg-red-500/25 border border-red-500/50 text-red-200 text-sm sm:text-base font-semibold mt-2">
                       {errors.wheelScores}
                     </div>
                   )}
@@ -1411,7 +1403,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 17 */}
                   <div className="space-y-2.5">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      17. Nếu chỉ cải thiện một lĩnh vực trong 90 ngày tới, bạn sẽ chọn lĩnh vực nào? <span className="text-[#FA5B13]">*</span>
+                      16. Nếu chỉ cải thiện một lĩnh vực trong 90 ngày tới, bạn sẽ chọn lĩnh vực nào? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <select
                       value={formData.priorityArea}
@@ -1429,7 +1421,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 18: Rào cản */}
                   <div className="space-y-3 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      18. Điều gì đang cản trở bạn thay đổi? <span className="text-white font-normal text-sm sm:text-base">(chọn nhiều)</span>
+                      17. Điều gì đang cản trở bạn thay đổi? <span className="text-white font-normal text-sm sm:text-base">(chọn nhiều)</span>
                     </label>
                     <div className="flex flex-wrap gap-2.5">
                       {OBSTACLE_OPTIONS.map((item) => (
@@ -1452,7 +1444,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 19: Tặng thêm bộ quà tặng giải pháp chi tiết */}
                   <div className="space-y-3 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      19. Bạn có muốn nhận thêm bộ quà tặng giải pháp chi tiết cho vấn đề cá nhân của bạn không? <span className="text-[#FA5B13]">*</span>
+                      18. Bạn có muốn nhận thêm bộ quà tặng giải pháp chi tiết cho vấn đề cá nhân của bạn không? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <button
@@ -1505,7 +1497,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* SĐT / Zalo */}
                   <div className="space-y-2">
                     <label className="block text-base sm:text-lg font-semibold text-white">
-                      20. Số điện thoại / Zalo để nhận báo cáo & quà tặng <span className="text-[#FA5B13]">*</span>
+                      19. Số điện thoại / Zalo để nhận báo cáo & quà tặng <span className="text-[#FA5B13]">*</span>
                     </label>
                     <input
                       type="tel"
@@ -1535,7 +1527,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Email */}
                   <div className="space-y-2 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white">
-                      21. Email <span className="text-white font-normal text-sm sm:text-base">(không bắt buộc)</span>
+                      20. Email <span className="text-white font-normal text-sm sm:text-base">(không bắt buộc)</span>
                     </label>
                     <input
                       type="email"
@@ -1572,11 +1564,6 @@ export const FamilyHappinessMap: React.FC = () => {
 
                 <AiDisclaimer />
 
-                <div className="rounded-2xl bg-[#FA5B13]/20 p-4 sm:p-5 text-base sm:text-lg text-white leading-relaxed">
-                  <strong className="font-bold">Lưu ý quan trọng: </strong>
-                  sau khi bấm “Gửi khảo sát”, bạn <strong className="font-bold">không thể sửa lại</strong> thông tin. Hãy đọc kỹ từng phần. Nếu cần chỉnh chỗ nào, bấm “Sửa” ở phần đó rồi quay lại đây.
-                </div>
-
                 {(() => {
                   const sc = formData.wheelScores;
                   const allObstacles = [...formData.obstacles, ...(formData.obstacleOther.trim() ? [`Khác: ${formData.obstacleOther.trim()}`] : [])];
@@ -1595,7 +1582,6 @@ export const FamilyHappinessMap: React.FC = () => {
                         ['Ngày sinh (dương lịch)', isoToVN(formData.birthDate)],
                         ['Giờ sinh', formData.birthTime || 'Không rõ'],
                         ['Giới tính', formData.gender],
-                        ['Tỉnh/thành phố', formData.city.trim()],
                         ['Công việc', formData.occupation.trim()],
                       ],
                     },
