@@ -11,7 +11,7 @@ export const ZaloOpenButton: React.FC<{ className?: string }> = ({ className = '
   <button
     type="button"
     onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))}
-    className={`cursor-pointer text-sm sm:text-base font-semibold text-[#FFA877] hover:text-white underline underline-offset-4 transition ${className}`}
+    className={`inline-flex w-full sm:w-auto cursor-pointer items-center justify-center gap-2 rounded-full bg-[#FA5B13] px-7 py-4 text-base sm:text-lg font-bold text-white shadow-lg shadow-[#FA5B13]/40 ring-4 ring-[#FA5B13]/20 transition hover:bg-[#e24f0d] active:scale-95 ${className}`}
   >
     Vui lòng tham gia nhóm Zalo Gieo Hạt để nhận kết quả &rarr;
   </button>

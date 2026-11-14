@@ -3,6 +3,7 @@ import { GOOGLE_SCRIPT_URL } from '../lib/submitToSheet';
 import { buildReport, parseBirthDate, Report, ReportInput, RelativeInput } from '../lib/report';
 import { AREAS, AreaKey } from '../data/lifeWheel';
 import { ZaloPopups, ZaloOpenButton, ZALO_GROUP_LINK } from './ZaloPopup';
+import { AiDisclaimer } from './AiDisclaimer';
 
 // ---------- Tra cứu dữ liệu từ Apps Script ----------
 interface LookupRecord {
@@ -528,6 +529,8 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
       </nav>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-8 py-10 sm:py-14 space-y-20">
+        <AiDisclaimer className="max-w-[64ch]" />
+
         {/* TỔNG QUAN */}
         <section id="tong-quan" className="scroll-mt-24 space-y-6">
           <p className={eyebrow}>Báo cáo cá nhân{r.code ? ` · Mã ${r.code}` : ''}</p>
@@ -1150,9 +1153,8 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
 
         <footer className="pt-6 pb-10 space-y-3 text-center">
           <p className={`text-xl text-white/90 ${heading}`}>“Tương lai không được dự đoán, tương lai được tạo ra bởi những gì bạn làm hôm nay.”</p>
-          <p className="text-xs text-white/40 leading-relaxed max-w-[60ch] mx-auto">
-            Nội dung dựa trên thần số học và tử vi, mang tính tham khảo và định hướng, không thay thế tư vấn y tế, pháp lý hay tài chính. Mọi quyết định cuối cùng thuộc về bạn.
-          </p>
+          <AiDisclaimer subtle className="max-w-[64ch] mx-auto" />
+          <p className="text-xs text-white/40 leading-relaxed max-w-[60ch] mx-auto">Mọi quyết định cuối cùng thuộc về bạn.</p>
         </footer>
       </main>
     </>

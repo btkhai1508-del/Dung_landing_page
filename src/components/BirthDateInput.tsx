@@ -1,54 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-// Ô nhập ngày sinh luôn theo dạng dd/mm/yyyy (không phụ thuộc ngôn ngữ trình duyệt).
+// Ô nhập ngày sinh gồm 3 ô: Ngày / Tháng / Năm, có dấu "/" nằm sẵn giữa các ô.
 // Giá trị trả ra cho form: 'yyyy-mm-dd' khi hợp lệ, '' khi trống,
-// hoặc chính chuỗi đang gõ khi chưa đủ / sai ngày (để bước kiểm tra báo lỗi).
+// hoặc chuỗi đang gõ "dd/mm/yyyy" khi chưa đủ / sai ngày (để bước kiểm tra báo lỗi).
 
 export const isoToVN = (iso: string) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || '';
 };
 
-/**
- * Định dạng khi gõ thành dd/mm/yyyy và tự thêm số 0:
- *  - ngày bắt đầu bằng 4–9 hoặc tháng bắt đầu bằng 2–9 chỉ có thể là 1 chữ số → "9" thành "09/";
- *  - gõ dấu phân cách (/ - . hoặc cách) sau 1 chữ số → "1/" thành "01/".
- * Khi người dùng đang xóa (backspace) thì không tự thêm dấu "/" ở cuối.
- */
-export const formatTyped = (raw: string, deleting = false): string => {
-  let day = '';
-  let month = '';
-  let year = '';
-  let stage = 0;
-  for (const c of raw) {
-    if (/\d/.test(c)) {
-      if (stage === 0) {
-        day += c;
-        if (day.length === 1 && Number(c) > 3) {
-          day = '0' + c;
-          stage = 1;
-        } else if (day.length === 2) stage = 1;
-      } else if (stage === 1) {
-        month += c;
-        if (month.length === 1 && Number(c) > 1) {
-          month = '0' + c;
-          stage = 2;
-        } else if (month.length === 2) stage = 2;
-      } else if (year.length < 4) {
-        year += c;
-      }
-    } else if (stage === 0 && day.length === 1) {
-      day = '0' + day;
-      stage = 1;
-    } else if (stage === 1 && month.length === 1) {
-      month = '0' + month;
-      stage = 2;
-    }
-  }
-  let out = day;
-  if (stage >= 1) out += '/' + month;
-  if (stage >= 2) out += '/' + year;
-  if (deleting && out.endsWith('/')) out = out.slice(0, -1);
+interface Parts {
+  d: string;
+  m: string;
+  y: string;
+}
+
+const parse = (v: string): Parts => {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+  if (iso) return { d: iso[3], m: iso[2], y: iso[1] };
+  const p = (v || '').split('/');
+  return { d: p[0] || '', m: p[1] || '', y: p[2] || '' };
+};
+
+const join = ({ d, m, y }: Parts) => {
+  let out = d;
+  if (m !== '' || y !== '') out += '/' + m;
+  if (y !== '') out += '/' + y;
   return out;
 };
 
@@ -57,8 +34,7 @@ const toValue = (text: string) => {
   if (!m) return text;
   const [, dd, mm, yyyy] = m;
   const date = new Date(Date.UTC(+yyyy, +mm - 1, +dd));
-  const real =
-    date.getUTCFullYear() === +yyyy && date.getUTCMonth() === +mm - 1 && date.getUTCDate() === +dd;
+  const real = date.getUTCFullYear() === +yyyy && date.getUTCMonth() === +mm - 1 && date.getUTCDate() === +dd;
   return real ? `${yyyy}-${mm}-${dd}` : text;
 };
 
@@ -69,30 +45,123 @@ interface BirthDateInputProps {
   id?: string;
 }
 
-export const BirthDateInput: React.FC<BirthDateInputProps> = ({ value, onChange, className, id }) => {
-  const [text, setText] = useState(() => isoToVN(value));
+const cell = 'bg-transparent text-center outline-none tabular-nums placeholder:text-white/40';
+
+export const BirthDateInput: React.FC<BirthDateInputProps> = ({ value, onChange, className = '', id }) => {
+  const [parts, setParts] = useState<Parts>(() => parse(value));
+  const dRef = useRef<HTMLInputElement>(null);
+  const mRef = useRef<HTMLInputElement>(null);
+  const yRef = useRef<HTMLInputElement>(null);
 
   // Đồng bộ khi form bị đặt lại từ bên ngoài
   useEffect(() => {
-    if (toValue(text) !== value) setText(isoToVN(value));
+    if (toValue(join(parts)) !== value) setParts(parse(value));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
+  const update = (next: Parts) => {
+    setParts(next);
+    onChange(toValue(join(next)));
+  };
+
+  // Gõ ngày: 4–9 chỉ có thể là 1 chữ số nên tự thành 04…09; gõ "/" sau 1 chữ số cũng tự thêm số 0
+  const onDay = (raw: string) => {
+    let d = raw.replace(/\D/g, '').slice(0, 2);
+    let next = false;
+    if (d.length === 1 && Number(d) > 3) {
+      d = '0' + d;
+      next = true;
+    } else if (d.length === 2) next = true;
+    else if (d.length === 1 && /[\/\-. ]/.test(raw)) {
+      d = '0' + d;
+      next = true;
+    }
+    update({ ...parts, d });
+    if (next) mRef.current?.focus();
+  };
+  const onMonth = (raw: string) => {
+    let m = raw.replace(/\D/g, '').slice(0, 2);
+    let next = false;
+    if (m.length === 1 && Number(m) > 1) {
+      m = '0' + m;
+      next = true;
+    } else if (m.length === 2) next = true;
+    else if (m.length === 1 && /[\/\-. ]/.test(raw)) {
+      m = '0' + m;
+      next = true;
+    }
+    update({ ...parts, m });
+    if (next) yRef.current?.focus();
+  };
+  const onYear = (raw: string) => update({ ...parts, y: raw.replace(/\D/g, '').slice(0, 4) });
+
+  // Xóa lùi khi ô đang trống thì nhảy về ô trước
+  const back = (e: React.KeyboardEvent<HTMLInputElement>, field: 'm' | 'y') => {
+    if (e.key === 'Backspace' && parts[field] === '') {
+      e.preventDefault();
+      (field === 'm' ? dRef : mRef).current?.focus();
+    }
+  };
+
+  // Dán "15/08/1990" hoặc "15081990" vào bất kỳ ô nào
+  const onPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const digits = e.clipboardData.getData('text').replace(/\D/g, '');
+    if (digits.length >= 8) {
+      e.preventDefault();
+      update({ d: digits.slice(0, 2), m: digits.slice(2, 4), y: digits.slice(4, 8) });
+      yRef.current?.focus();
+    }
+  };
+
   return (
-    <input
-      id={id}
-      type="text"
-      inputMode="numeric"
-      autoComplete="bday"
-      placeholder="dd/mm/yyyy"
-      maxLength={10}
-      value={text}
-      onChange={(e) => {
-        const next = formatTyped(e.target.value, e.target.value.length < text.length);
-        setText(next);
-        onChange(toValue(next));
-      }}
-      className={className}
-    />
+    <div className={`${className} flex items-center gap-1.5 focus-within:border-[#FA5B13]`} role="group" aria-label="Ngày tháng năm sinh">
+      <input
+        ref={dRef}
+        id={id}
+        type="text"
+        inputMode="numeric"
+        autoComplete="bday-day"
+        aria-label="Ngày"
+        placeholder="dd"
+        maxLength={3}
+        value={parts.d}
+        onChange={(e) => onDay(e.target.value)}
+        onFocus={(e) => e.target.select()}
+        onPaste={onPaste}
+        className={`${cell} w-9 sm:w-11`}
+      />
+      <span className="text-white/55" aria-hidden="true">/</span>
+      <input
+        ref={mRef}
+        type="text"
+        inputMode="numeric"
+        autoComplete="bday-month"
+        aria-label="Tháng"
+        placeholder="mm"
+        maxLength={3}
+        value={parts.m}
+        onChange={(e) => onMonth(e.target.value)}
+        onKeyDown={(e) => back(e, 'm')}
+        onFocus={(e) => e.target.select()}
+        onPaste={onPaste}
+        className={`${cell} w-9 sm:w-11`}
+      />
+      <span className="text-white/55" aria-hidden="true">/</span>
+      <input
+        ref={yRef}
+        type="text"
+        inputMode="numeric"
+        autoComplete="bday-year"
+        aria-label="Năm"
+        placeholder="yyyy"
+        maxLength={4}
+        value={parts.y}
+        onChange={(e) => onYear(e.target.value)}
+        onKeyDown={(e) => back(e, 'y')}
+        onFocus={(e) => e.target.select()}
+        onPaste={onPaste}
+        className={`${cell} w-14 sm:w-16`}
+      />
+    </div>
   );
 };
