@@ -1,7 +1,7 @@
 // Google Analytics 4 (GA4).
 // Lấy Measurement ID tại: analytics.google.com → Admin → Data streams → (web stream) → "Measurement ID".
 // Để trống → không tải GA (dùng khi chạy thử ở máy).
-export const GA_MEASUREMENT_ID = 'G-2SYQD4PSWZ'; // ví dụ: 'G-ABC123XYZ'
+export const GA_MEASUREMENT_ID = 'G-SDB1B4B1DP'; // ví dụ: 'G-ABC123XYZ'
 
 declare global {
   interface Window {
