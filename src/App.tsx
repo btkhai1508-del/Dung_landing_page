@@ -18,14 +18,21 @@ type Route = 'home' | 'bando' | 'affiliate' | 'affiliate-home' | 'ketqua' | 'adm
 function getRouteFromLocation(): Route {
   if (typeof window === 'undefined') return 'home';
   const path = window.location.pathname.toLowerCase();
-  const search = window.location.search.toLowerCase();
   const hash = window.location.hash.toLowerCase();
+
+  // Chỉ xét TÊN tham số (?bando, ?ketqua) và giá trị của ?page= / ?form=.
+  // Không dò cả chuỗi query, để link có UTM (vd. ?utm_medium=affiliate) không bị chuyển nhầm trang.
+  const params = new URLSearchParams(window.location.search);
+  const paramKeys = new Set(Array.from(params.keys(), (k) => k.toLowerCase()));
+  const pageParam = (params.get('page') || '').toLowerCase();
+  const formParam = (params.get('form') || '').toLowerCase();
+  const queryIs = (name: string) => paramKeys.has(name) || pageParam === name || formParam === name;
 
   // Trang quản trị duyệt kết quả: /admin
   if (path === '/admin' || path.startsWith('/admin/') || path === '/quan-tri') return 'admin';
 
   // Trang tra cứu kết quả: /ketqua, #ketqua, ?ketqua
-  if (path.includes('/ketqua') || path.includes('/ket-qua') || hash.includes('ketqua') || search.includes('ketqua')) return 'ketqua';
+  if (path.includes('/ketqua') || path.includes('/ket-qua') || hash.includes('ketqua') || queryIs('ketqua')) return 'ketqua';
 
   // Nhận diện link Bản Đồ Hạnh Phúc:
   // Hỗ trợ truy cập trực tiếp qua:
@@ -38,9 +45,7 @@ function getRouteFromLocation(): Route {
     path.includes('/khao-sat') ||
     hash.includes('bando') ||
     hash.includes('ban-do') ||
-    search.includes('bando') ||
-    search.includes('page=bando') ||
-    search.includes('form=bando');
+    queryIs('bando');
 
   if (isBando) return 'bando';
 
@@ -53,7 +58,7 @@ function getRouteFromLocation(): Route {
     path.includes('/affiliate') ||
     path.includes('/thu-thach') ||
     hash.includes('affiliate') ||
-    search.includes('affiliate');
+    queryIs('affiliate');
 
   return isAffiliate ? 'affiliate' : 'home';
 }

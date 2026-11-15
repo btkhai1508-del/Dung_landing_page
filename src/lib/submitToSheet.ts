@@ -2,6 +2,8 @@
 // Apps Script dùng `sheet` để chọn đúng tab, và `fields` (JSON: tiêu đề cột → giá trị,
 // giữ nguyên thứ tự) để ghi thành một dòng theo hàng tiêu đề của tab đó.
 
+import { trackEvent } from './analytics';
+
 export const GOOGLE_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbyVvzC75rDJbWAJ-J-xHxG34x0MAsrJvvFAfnNKh_0PVN7YfqK9y1ttFKYHoZtKYzVghA/exec';
 
@@ -38,6 +40,9 @@ export async function submitToSheet({ sheet, form, name, phone, email, fields }:
     headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
     body: body.toString(),
   });
+
+  // Báo GA4 có người đăng ký. Đánh dấu `generate_lead` là Key event trong GA4 để xem tỷ lệ chuyển đổi theo kênh.
+  trackEvent('generate_lead', { form_name: form, sheet_name: sheet || 'Thông tin' });
 }
 
 /**
