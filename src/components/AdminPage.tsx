@@ -1,296 +1,127 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GOOGLE_SCRIPT_URL } from '../lib/submitToSheet';
+import React, { useState } from 'react';
+import { MAX_ISSUE, normalizeCode, passwordFor } from '../lib/unlock';
 
-// Trang quản trị đơn giản: duyệt số điện thoại đã làm khảo sát bằng nút ✓ (cho xem kết quả) và ✕ (từ chối).
-// Khóa quản trị được kiểm tra ở phía Apps Script (Script properties → ADMIN_KEY), không lưu trong mã web.
+// Trang /admin cho chuyên gia: dán MÃ (7 số) hoặc LINK kết quả của khách → lấy mật khẩu mở khóa bản đầy đủ.
+// Mỗi mật khẩu chỉ mở được 1 lần trên mỗi trình duyệt; khách cần mở lại thì cấp "lần 2", "lần 3"...
 
-type Status = 'pending' | 'approved' | 'rejected';
-interface Row {
-  row: number;
-  code: string;
-  time: string;
-  name: string;
-  phone: string;
-  email: string;
-  status: Status;
-}
-type Filter = Status | 'all';
+// SHA-256 của khóa vào trang (khóa gốc lưu ở file ADMIN_PIN.local.txt trên máy, không đưa lên GitHub).
+const PIN_HASH = 'b816b423b480679655dd74645a03d40f10f07b4f7b744bdc24a70ec24033c580';
+const SESSION_KEY = 'dgh_admin_ok';
 
-const KEY_STORE = 'dgh_admin_key';
-const PAGE = 100;
-
-const ERRORS: Record<string, string> = {
-  bad: 'Sai khóa quản trị. Vui lòng nhập lại.',
-  nokey: 'Chưa đặt khóa quản trị trong Apps Script (Script properties → ADMIN_KEY).',
-  locked: 'Nhập sai quá nhiều lần, vui lòng thử lại sau khoảng 1 giờ.',
-  row_changed: 'Danh sách đã thay đổi, đang tải lại.',
-  network: 'Chưa kết nối được tới hệ thống. Vui lòng kiểm tra mạng và thử lại.',
-  unknown: 'Có lỗi xảy ra, vui lòng thử lại.',
-};
-
-async function call(params: Record<string, string>): Promise<any> {
-  const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${GOOGLE_SCRIPT_URL}?${qs}`);
-  return res.json();
+async function sha256(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const readKey = () => {
+/** Lấy mã từ link /ketqua#r=... hoặc từ chuỗi người dùng dán vào. */
+function extractCode(raw: string): string {
+  const text = raw.trim();
+  const i = text.indexOf('#r=');
+  if (i !== -1) {
+    try {
+      const b64 = text.slice(i + 3).replace(/-/g, '+').replace(/_/g, '/');
+      const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+      const json = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+      return normalizeCode(json.code || '');
+    } catch {
+      return '';
+    }
+  }
+  return normalizeCode(text);
+}
+
+const readOk = () => {
   try {
-    return sessionStorage.getItem(KEY_STORE) || '';
+    return sessionStorage.getItem(SESSION_KEY) === '1';
   } catch {
-    return '';
+    return false;
   }
 };
 
-const LABEL: Record<Filter, string> = { pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', all: 'Tất cả' };
+const card = 'rounded-2xl bg-white/[0.05] p-5 sm:p-6';
+const input = 'w-full rounded-xl bg-black/40 px-4 py-3 text-base text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-[#FA5B13]';
 
 export const AdminPage: React.FC = () => {
-  const [key, setKey] = useState(readKey);
-  const [input, setInput] = useState('');
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<Filter>('pending');
-  const [query, setQuery] = useState('');
-  const [busy, setBusy] = useState<number | null>(null);
-  const [shown, setShown] = useState(PAGE);
-  const keyRef = useRef(key);
-  keyRef.current = key;
+  const [ok, setOk] = useState(readOk);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [raw, setRaw] = useState('');
+  const [issue, setIssue] = useState(1);
+  const [copied, setCopied] = useState(false);
 
-  // không cho công cụ tìm kiếm lập chỉ mục trang quản trị
-  useEffect(() => {
-    const meta = document.createElement('meta');
-    meta.name = 'robots';
-    meta.content = 'noindex,nofollow';
-    document.head.appendChild(meta);
-    const prev = document.title;
-    document.title = 'Duyệt kết quả';
-    return () => {
-      document.head.removeChild(meta);
-      document.title = prev;
-    };
-  }, []);
-
-  const load = useCallback(async (k: string, quiet = false) => {
-    if (!quiet) setLoading(true);
-    try {
-      const data = await call({ action: 'adminlist', key: k });
-      if (data && data.ok) {
-        setRows(data.rows as Row[]);
-        setError('');
-      } else {
-        const code = (data && data.error) || 'unknown';
-        setError(ERRORS[code] || ERRORS.unknown);
-        if (code === 'bad' || code === 'nokey' || code === 'locked') {
-          setKey('');
-          setRows(null);
-          try {
-            sessionStorage.removeItem(KEY_STORE);
-          } catch {
-            /* bỏ qua */
-          }
-        }
-      }
-    } catch {
-      setError(ERRORS.network);
-    }
-    if (!quiet) setLoading(false);
-  }, []);
-
-  // tải khi đã có khóa, và tự làm mới mỗi 30 giây
-  useEffect(() => {
-    if (!key) return;
-    load(key);
-    const id = window.setInterval(() => {
-      if (document.visibilityState === 'visible' && busy === null) load(keyRef.current, true);
-    }, 30000);
-    return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, load]);
-
-  const login = (e: React.FormEvent) => {
+  const login = async (e: React.FormEvent) => {
     e.preventDefault();
-    const k = input.trim();
-    if (!k) return;
-    try {
-      sessionStorage.setItem(KEY_STORE, k);
-    } catch {
-      /* bỏ qua */
-    }
-    setError('');
-    setKey(k);
-    setInput('');
-  };
-
-  const logout = () => {
-    try {
-      sessionStorage.removeItem(KEY_STORE);
-    } catch {
-      /* bỏ qua */
-    }
-    setKey('');
-    setRows(null);
-  };
-
-  // Bấm ✓/✕: đặt trạng thái; bấm lại đúng nút đang sáng thì trả về "chờ duyệt"
-  const set = async (r: Row, target: 'approved' | 'rejected') => {
-    const next: Status = r.status === target ? 'pending' : target;
-    setBusy(r.row);
-    setRows((cur) => (cur ? cur.map((x) => (x.row === r.row ? { ...x, status: next } : x)) : cur));
-    try {
-      const data = await call({ action: 'setstatus', key, row: String(r.row), phone: r.phone, status: next });
-      if (!data || !data.ok) {
-        setError(ERRORS[(data && data.error) || 'unknown'] || ERRORS.unknown);
-        await load(key, true);
-      } else {
-        setError('');
+    if ((await sha256(pin.trim())) === PIN_HASH) {
+      try {
+        sessionStorage.setItem(SESSION_KEY, '1');
+      } catch {
+        /* bỏ qua */
       }
-    } catch {
-      setError(ERRORS.network);
-      await load(key, true);
-    }
-    setBusy(null);
+      setOk(true);
+    } else setPinError('Sai khóa quản trị.');
   };
 
-  const counts = useMemo(() => {
-    const c = { pending: 0, approved: 0, rejected: 0 };
-    (rows || []).forEach((r) => c[r.status]++);
-    return c;
-  }, [rows]);
+  const code = extractCode(raw);
+  const valid = code.length === 7;
+  const pw = valid ? passwordFor(code, issue) : '';
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const qd = q.replace(/\D/g, '');
-    return (rows || []).filter((r) => {
-      if (filter !== 'all' && r.status !== filter) return false;
-      if (!q) return true;
-      return r.name.toLowerCase().includes(q) || r.code.includes(q) || (qd.length >= 3 && r.phone.replace(/\D/g, '').includes(qd));
-    });
-  }, [rows, filter, query]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(pw);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* chọn tay */
+    }
+  };
 
-  useEffect(() => setShown(PAGE), [filter, query]);
+  return (
+    <main className="min-h-screen w-full bg-[#0d0f14] text-white font-be-vietnam flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md space-y-8">
+        <header className="space-y-2 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Dũng Gieo Hạt · Quản trị</p>
+          <h1 className="text-3xl sm:text-4xl font-playfair-heading italic">Cấp mật khẩu xem kết quả</h1>
+        </header>
 
-  const shell = (children: React.ReactNode) => (
-    <div className="min-h-screen bg-[#0d0f14] text-white font-be-vietnam">{children}</div>
-  );
+        {!ok ? (
+          <form onSubmit={login} className={`${card} space-y-4`}>
+            <input type="password" value={pin} onChange={(e) => { setPin(e.target.value); setPinError(''); }}
+              placeholder="Khóa quản trị" aria-label="Khóa quản trị" className={input} autoFocus />
+            {pinError && <p role="alert" className="text-sm text-red-300">{pinError}</p>}
+            <button type="submit" className="w-full rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] py-3 font-bold transition cursor-pointer">Vào</button>
+          </form>
+        ) : (
+          <div className="space-y-6">
+            <div className={`${card} space-y-4`}>
+              <label className="block space-y-2">
+                <span className="text-sm text-white/70">Mã báo cáo (7 số) hoặc link kết quả khách gửi</span>
+                <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3}
+                  placeholder="1611482 hoặc https://…/ketqua#r=…" className={`${input} resize-none`} />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm text-white/70">Lần cấp (khách cần mở lại thì tăng lên)</span>
+                <select value={issue} onChange={(e) => setIssue(Number(e.target.value))} className={input}>
+                  {Array.from({ length: MAX_ISSUE }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>Lần {n}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-  // ----- Đăng nhập -----
-  if (!key) {
-    return shell(
-      <main className="min-h-screen flex items-center justify-center px-4 py-12">
-        <form onSubmit={login} className="w-full max-w-sm space-y-5">
-          <div className="space-y-2 text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Quản trị</p>
-            <h1 className="font-playfair-heading italic font-medium text-4xl">Duyệt kết quả</h1>
-            <p className="text-sm text-white/65">Nhập khóa quản trị để xem danh sách và duyệt.</p>
+            {raw.trim() && !valid && <p className="text-sm text-red-300 text-center">Không đọc được mã. Mã gồm 7 chữ số, ví dụ 1611482.</p>}
+
+            {valid && (
+              <div className={`${card} space-y-3 text-center`}>
+                <p className="text-sm text-white/60">Mã <span className="font-mono">{code}</span> · lần {issue}</p>
+                <p className="font-mono text-5xl font-bold tracking-[0.2em]">{pw}</p>
+                <button onClick={copy} className="rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] px-6 py-2.5 text-sm font-bold transition cursor-pointer">
+                  {copied ? 'Đã sao chép ✓' : 'Sao chép mật khẩu'}
+                </button>
+              </div>
+            )}
           </div>
-          <input
-            type="password"
-            autoFocus
-            autoComplete="current-password"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Khóa quản trị"
-            className="w-full py-3.5 px-4 rounded-2xl bg-white/10 text-white text-lg placeholder:text-white/40 outline-none focus:ring-2 focus:ring-[#FA5B13]/70"
-          />
-          {error && <p role="alert" className="text-sm text-red-300 font-medium leading-relaxed">{error}</p>}
-          <button type="submit" className="w-full py-3.5 rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] font-bold transition cursor-pointer">
-            Đăng nhập
-          </button>
-        </form>
-      </main>
-    );
-  }
-
-  // ----- Danh sách -----
-  return shell(
-    <main className="max-w-3xl mx-auto px-4 py-8 sm:py-12 space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Quản trị</p>
-          <h1 className="font-playfair-heading italic font-medium text-3xl sm:text-4xl">Duyệt kết quả khảo sát</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => load(key)} disabled={loading} className="rounded-full bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-semibold transition cursor-pointer disabled:opacity-60">
-            {loading ? 'Đang tải…' : 'Làm mới'}
-          </button>
-          <button onClick={logout} className="rounded-full px-4 py-2 text-sm text-white/60 hover:text-white transition cursor-pointer">Đăng xuất</button>
-        </div>
-      </header>
-
-      <p className="text-sm text-white/70 leading-relaxed">
-        Bấm <span className="font-bold text-emerald-300">✓</span> để cho phép số này xem kết quả. Bấm <span className="font-bold text-red-300">✕</span> để từ chối: người dùng sẽ thấy trang yêu cầu vào nhóm Zalo. Bấm lại nút đang sáng để trả về “chờ duyệt”.
-      </p>
-
-      {error && <p role="alert" className="text-sm text-red-300 font-medium">{error}</p>}
-
-      <div className="flex flex-wrap items-center gap-2">
-        {(['pending', 'approved', 'rejected', 'all'] as Filter[]).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition cursor-pointer ${filter === f ? 'bg-[#FA5B13] text-white' : 'bg-white/10 text-white/75 hover:bg-white/15'}`}
-          >
-            {LABEL[f]}
-            {f !== 'all' && <span className="ml-1.5 opacity-80">{counts[f]}</span>}
-          </button>
-        ))}
+        )}
       </div>
-
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Tìm theo số điện thoại, tên hoặc mã"
-        className="w-full py-3 px-4 rounded-2xl bg-white/10 placeholder:text-white/40 outline-none focus:ring-2 focus:ring-[#FA5B13]/70"
-      />
-
-      {rows === null ? (
-        <p className="text-white/60">Đang tải danh sách…</p>
-      ) : filtered.length === 0 ? (
-        <p className="text-white/60 py-8 text-center">Không có số nào trong mục này.</p>
-      ) : (
-        <>
-          <ul className="space-y-2.5">
-            {filtered.slice(0, shown).map((r) => (
-              <li key={r.row} className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.06] px-4 py-3.5">
-                <div className="min-w-0">
-                  <p className="font-semibold text-lg tabular-nums tracking-wide">{r.phone}</p>
-                  <p className="text-sm text-white/70 truncate">{r.name || 'Không ghi tên'}</p>
-                  <p className="text-xs text-white/45">Mã {r.code || '—'} · {r.time}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2.5">
-                  <button
-                    onClick={() => set(r, 'approved')}
-                    disabled={busy === r.row}
-                    aria-label={`Duyệt ${r.phone}`}
-                    aria-pressed={r.status === 'approved'}
-                    title="Duyệt: cho xem kết quả"
-                    className={`h-12 w-12 rounded-full text-2xl font-bold transition cursor-pointer disabled:opacity-50 ${r.status === 'approved' ? 'bg-emerald-500 text-white' : 'bg-white/10 text-emerald-300 hover:bg-emerald-500/30'}`}
-                  >
-                    ✓
-                  </button>
-                  <button
-                    onClick={() => set(r, 'rejected')}
-                    disabled={busy === r.row}
-                    aria-label={`Từ chối ${r.phone}`}
-                    aria-pressed={r.status === 'rejected'}
-                    title="Từ chối: yêu cầu vào nhóm Zalo"
-                    className={`h-12 w-12 rounded-full text-2xl font-bold transition cursor-pointer disabled:opacity-50 ${r.status === 'rejected' ? 'bg-red-500 text-white' : 'bg-white/10 text-red-300 hover:bg-red-500/30'}`}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {filtered.length > shown && (
-            <button onClick={() => setShown((n) => n + PAGE)} className="w-full rounded-full bg-white/10 hover:bg-white/15 py-3 text-sm font-semibold transition cursor-pointer">
-              Hiện thêm ({filtered.length - shown} số nữa)
-            </button>
-          )}
-        </>
-      )}
     </main>
   );
 };

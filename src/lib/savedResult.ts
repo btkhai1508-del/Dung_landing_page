@@ -4,6 +4,7 @@
 //   nên mở được trên máy khác hoặc gửi qua Zalo. Phần sau dấu # không bao giờ được gửi lên máy chủ.
 
 import type { ReportInput } from './report';
+import { newReportCode } from './unlock';
 
 const STORAGE_KEY = 'dgh_ketqua_v1';
 const HASH_PREFIX = '#r=';
@@ -57,7 +58,13 @@ export function loadResult(): ReportInput | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return isReportInput(parsed) ? parsed : null;
+    if (!isReportInput(parsed)) return null;
+    // Kết quả cũ (trước khi có mã) → cấp mã và lưu lại
+    if (!parsed.code) {
+      parsed.code = newReportCode();
+      saveResult(parsed);
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -66,4 +73,13 @@ export function loadResult(): ReportInput | null {
 /** Link /ketqua chứa sẵn kết quả, mở được trên mọi máy. */
 export function buildResultLink(input: ReportInput): string {
   return `${window.location.origin}/ketqua${HASH_PREFIX}${toBase64Url(JSON.stringify(input))}`;
+}
+
+/** Trình duyệt này đã làm khảo sát chưa (mỗi trình duyệt chỉ làm 1 lần). */
+export function hasSavedResult(): boolean {
+  try {
+    return !!localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return false;
+  }
 }

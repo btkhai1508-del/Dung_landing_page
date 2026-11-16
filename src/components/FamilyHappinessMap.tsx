@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { saveResult } from '../lib/savedResult';
+import { saveResult, hasSavedResult } from '../lib/savedResult';
+import { newReportCode } from '../lib/unlock';
 import { trackEvent } from '../lib/analytics';
 import type { ReportInput } from '../lib/report';
 import { BirthDateInput, isoToVN } from './BirthDateInput';
@@ -179,7 +180,39 @@ const BTN_BACK =
 const BTN_PRIMARY =
   'flex-1 sm:flex-none min-h-[52px] px-5 sm:px-9 py-3.5 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-lg shadow-[#FA5B13]/30 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed';
 
+// Mỗi trình duyệt chỉ làm khảo sát 1 lần: đã có kết quả → chỉ cho xem lại kết quả.
 export const FamilyHappinessMap: React.FC = () => {
+  const [done] = useState(hasSavedResult);
+  return done ? <AlreadyDone /> : <SurveyForm />;
+};
+
+const goToKetqua = () => {
+  window.history.pushState({}, '', '/ketqua');
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  window.scrollTo({ top: 0 });
+};
+
+const AlreadyDone: React.FC = () => (
+  <div className="relative min-h-screen w-full text-white font-be-vietnam bg-[#0d0f14] flex items-center justify-center px-4 py-12">
+    <div className="w-full max-w-md space-y-7 text-center">
+      <header className="space-y-3">
+        <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Bản Đồ Hạnh Phúc</p>
+        <h1 className="text-4xl sm:text-5xl text-white leading-[1.15] font-playfair-heading italic font-medium">Bạn đã làm khảo sát</h1>
+        <p className="text-base text-white/70 leading-relaxed">
+          Mỗi người chỉ làm khảo sát một lần. Kết quả của bạn đã được lưu trên trình duyệt này.
+        </p>
+      </header>
+      <button
+        onClick={goToKetqua}
+        className="w-full py-4 rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] text-white text-base font-bold tracking-wide transition cursor-pointer"
+      >
+        Xem kết quả của bạn
+      </button>
+    </div>
+  </div>
+);
+
+const SurveyForm: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<FormData>(INITIAL_DATA);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -323,6 +356,7 @@ export const FamilyHappinessMap: React.FC = () => {
     if (formData.obstacleOther.trim()) allObstacles.push(`Khác: ${formData.obstacleOther.trim()}`);
     const input: ReportInput = {
       name: formData.fullName.trim(),
+      code: newReportCode(),
       birthDate: isoToVN(formData.birthDate),
       birthTime: formData.birthTime,
       gender: formData.gender,

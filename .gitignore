@@ -10,3 +10,4 @@ coverage/
 # AI Studio & Internal
 .aistudio/
 .antigravity/
+*.local.txt
