@@ -45,9 +45,9 @@ export function loadResult(): ReportInput | null {
     try {
       const parsed = JSON.parse(fromBase64Url(hash.slice(HASH_PREFIX.length)));
       if (isReportInput(parsed)) {
-        // Mở link trên máy mới → lưu luôn cho lần sau, rồi bỏ phần #r=... khỏi thanh địa chỉ
-        // (để dữ liệu không lọt vào lịch sử trang hay công cụ đo lượt truy cập).
-        if (saveResult(parsed)) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        // Mở link trên máy mới → lưu luôn cho lần sau. Giữ nguyên #r=... trên thanh địa chỉ:
+        // ô nhập mật khẩu chỉ hiện khi mở bằng link kết quả (GA đã được cấu hình bỏ phần sau dấu #).
+        saveResult(parsed);
         return parsed;
       }
     } catch {
@@ -82,4 +82,9 @@ export function hasSavedResult(): boolean {
   } catch {
     return false;
   }
+}
+
+/** Trang đang được mở bằng link kết quả riêng (#r=...)? */
+export function openedFromLink(): boolean {
+  return typeof window !== 'undefined' && window.location.hash.startsWith(HASH_PREFIX);
 }

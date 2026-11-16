@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { buildReport, Report } from '../lib/report';
-import { loadResult, buildResultLink } from '../lib/savedResult';
+import { loadResult, buildResultLink, openedFromLink } from '../lib/savedResult';
 import { ZaloPopups, ZaloOpenButton, ZALO_GROUP_LINK } from './ZaloPopup';
 import { tryUnlock } from '../lib/unlock';
 import { AiDisclaimer } from './AiDisclaimer';
@@ -165,6 +165,8 @@ export const ResultPage: React.FC = () => {
     const input = loadResult();
     return input ? buildReport(input) : null;
   });
+  // Ô nhập mật khẩu chỉ có khi mở bằng link kết quả riêng
+  const [fromLink] = useState(openedFromLink);
   // Bản đầy đủ chỉ mở trong lần xem này (không lưu): tải lại trang là khóa lại.
   const [unlocked, setUnlocked] = useState(false);
 
@@ -220,7 +222,7 @@ export const ResultPage: React.FC = () => {
     );
   }
 
-  return shell(unlocked ? <ReportView report={report} full /> : <ReportView report={report} full={false} onUnlock={() => setUnlocked(true)} />);
+  return shell(unlocked ? <ReportView report={report} full /> : <ReportView report={report} full={false} fromLink={fromLink} onUnlock={() => setUnlocked(true)} />);
 };
 
 // Nút sao chép link kết quả riêng (mở được trên máy khác / gửi qua Zalo)
@@ -401,7 +403,7 @@ const NAV = [
   ['ke-hoach', 'Kế hoạch'],
 ];
 
-const ReportView: React.FC<{ report: Report; full: boolean; onUnlock?: () => void }> = ({ report: r, full, onUnlock }) => {
+const ReportView: React.FC<{ report: Report; full: boolean; fromLink?: boolean; onUnlock?: () => void }> = ({ report: r, full, fromLink = false, onUnlock }) => {
   const n = r.numerology;
   const lp = n.lifePath;
   const t = r.tuvi;
@@ -469,7 +471,7 @@ const ReportView: React.FC<{ report: Report; full: boolean; onUnlock?: () => voi
         {!full && (
           <>
             <TeaserTuVi report={r} />
-            <LockedPanel code={r.code || ''} onUnlock={onUnlock} />
+            <LockedPanel code={r.code || ''} fromLink={fromLink} onUnlock={onUnlock} />
           </>
         )}
 
@@ -1103,7 +1105,7 @@ const LOCKED_PARTS = [
   'Kế hoạch 30 ngày dành riêng cho bạn',
 ];
 
-const LockedPanel: React.FC<{ code: string; onUnlock?: () => void }> = ({ code, onUnlock }) => {
+const LockedPanel: React.FC<{ code: string; fromLink: boolean; onUnlock?: () => void }> = ({ code, fromLink, onUnlock }) => {
   const [pw, setPw] = useState('');
   const [error, setError] = useState('');
   const submit = (e: React.FormEvent) => {
@@ -1151,9 +1153,11 @@ const LockedPanel: React.FC<{ code: string; onUnlock?: () => void }> = ({ code, 
         <li className="space-y-3">
           <p className="text-base text-white leading-relaxed">
             <span className="font-bold text-[#FA5B13] mr-2">3</span>
-            Mở link kết quả, nhập mật khẩu để xem bản đầy đủ và lưu file PDF. Mật khẩu chỉ dùng được một lần.
+            {fromLink
+              ? 'Nhập mật khẩu chuyên gia đã gửi để xem bản đầy đủ và lưu file PDF. Mật khẩu chỉ dùng được một lần.'
+              : 'Khi nhận được mật khẩu, hãy mở link kết quả bạn đã sao chép ở bước 1 và nhập mật khẩu tại đó để xem bản đầy đủ, lưu file PDF.'}
           </p>
-          <form onSubmit={submit} className="flex flex-col sm:flex-row gap-3 max-w-md">
+          {fromLink && <form onSubmit={submit} className="flex flex-col sm:flex-row gap-3 max-w-md">
             <input
               value={pw}
               onChange={(e) => { setPw(e.target.value); setError(''); }}
@@ -1168,6 +1172,7 @@ const LockedPanel: React.FC<{ code: string; onUnlock?: () => void }> = ({ code, 
               Mở khóa
             </button>
           </form>
+          }
           {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
         </li>
       </ol>
