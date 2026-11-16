@@ -33,7 +33,10 @@ export function initAnalytics(): void {
     window.dataLayer.push(arguments);
   };
   window.gtag('js', new Date());
-  window.gtag('config', GA_MEASUREMENT_ID);
+  // Không gửi phần sau dấu # lên GA: link /ketqua#r=... chứa câu trả lời khảo sát của người dùng.
+  window.gtag('config', GA_MEASUREMENT_ID, {
+    page_location: window.location.origin + window.location.pathname + window.location.search,
+  });
 
   const script = document.createElement('script');
   script.async = true;

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { submitToSheet, checkPhoneExists, SHEET_TABS } from '../lib/submitToSheet';
+import { saveResult } from '../lib/savedResult';
+import { trackEvent } from '../lib/analytics';
+import type { ReportInput } from '../lib/report';
 import { BirthDateInput, isoToVN } from './BirthDateInput';
 import { TimeInput24, isValidTime24 } from './TimeInput24';
-import { ZaloPopups, ZaloOpenButton } from './ZaloPopup';
 import { AiDisclaimer } from './AiDisclaimer';
-import { computeNumerology } from '../lib/numerology';
-import { computeTuVi } from '../lib/tuviEngine';
 import {
   Sprout,
   ArrowRight,
@@ -26,7 +25,6 @@ interface FormData {
   birthDate: string;
   birthTime: string;
   gender: 'Nam' | 'Nữ' | '';
-  occupation: string;
 
   // Trang 3: Gia đình
   familyTime: string;
@@ -54,8 +52,6 @@ interface FormData {
   wantGiftSolution: 'Có' | 'Không';
 
   // Trang 6: Nhận bản đồ
-  phone: string;
-  email: string;
   deliveryChannels: string[];
   consent: boolean;
 }
@@ -77,7 +73,6 @@ const INITIAL_DATA: FormData = {
   birthDate: '',
   birthTime: '',
   gender: '',
-  occupation: '',
   familyTime: '',
   includeRelatives: false,
   relatives: [],
@@ -97,8 +92,6 @@ const INITIAL_DATA: FormData = {
   obstacleOther: '',
   supportMethods: [],
   wantGiftSolution: 'Có',
-  phone: '',
-  email: '',
   deliveryChannels: ['Zalo'],
   consent: false,
 };
@@ -178,46 +171,6 @@ const STEP_BACKGROUNDS: Record<number, { url: string; quote: string }> = {
   },
 };
 
-// Helper tính con số chủ đạo thần số học
-function calculateLifePath(birthDateStr: string): number {
-  if (!isIsoDate(birthDateStr)) return 0;
-  const [y, m, d] = birthDateStr.split('-').map(Number);
-  return computeNumerology('', d, m, y).lifePath;
-}
-
-// Thông tin cơ bản Tử vi & Ngũ hành lấy từ bộ tính chuẩn (lịch âm, nạp âm 60 hoa giáp, Bát trạch)
-interface TuViInfo {
-  canChiNam: string;
-  nguHanh: string;
-  cungMenh: string;
-  conSoChuDao: number;
-  amDuong: string;
-  namSinh: number;
-}
-
-function calculateTuVi(birthDateStr: string, gender: string = 'Nam'): TuViInfo {
-  if (!isIsoDate(birthDateStr)) {
-    return {
-      canChiNam: 'Giáp Thìn',
-      nguHanh: 'Hỏa (Phú Đăng Hỏa)',
-      cungMenh: 'Chấn (Mộc) - Đông Tứ Mệnh',
-      conSoChuDao: 9,
-      amDuong: 'Dương Nam',
-      namSinh: 2024,
-    };
-  }
-  const [y, m, d] = birthDateStr.split('-').map(Number);
-  const tv = computeTuVi(d, m, y, gender);
-  return {
-    canChiNam: tv.canChi,
-    nguHanh: `${tv.napAm.hanh} (${tv.napAm.name})`,
-    cungMenh: `${tv.batTrach.name} (${tv.batTrach.hanh}) - ${tv.batTrach.group}`,
-    conSoChuDao: calculateLifePath(birthDateStr),
-    amDuong: tv.amDuongLabel,
-    namSinh: y,
-  };
-}
-
 // Thanh nút điều hướng: dính đáy màn hình trên điện thoại để luôn bấm được, trở về bình thường trên màn lớn
 const ACTION_BAR =
   'sticky bottom-0 z-20 -mx-4 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/80 backdrop-blur-md border-t border-white/15 flex items-center justify-between gap-3 sm:static sm:mx-0 sm:px-0 sm:pt-8 sm:pb-0 sm:bg-transparent sm:backdrop-blur-none';
@@ -231,9 +184,6 @@ export const FamilyHappinessMap: React.FC = () => {
   const [formData, setFormData] = useState<FormData>(INITIAL_DATA);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-  const [phoneDuplicate, setPhoneDuplicate] = useState(false);
-  const [checkingPhone, setCheckingPhone] = useState(false);
   const [editingFromReview, setEditingFromReview] = useState(false);
   const [wheelIdx, setWheelIdx] = useState(0);
 
@@ -244,11 +194,11 @@ export const FamilyHappinessMap: React.FC = () => {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [currentStep, isCompleted, isPrivacyStep]);
+  }, [currentStep, isPrivacyStep]);
 
   // Có ô bắt buộc chưa điền / sai → tự cuộn tới đúng chỗ đó (và đặt con trỏ vào ô nhập)
   useEffect(() => {
-    if (!Object.keys(errors).length && !privacyError && !phoneDuplicate) return;
+    if (!Object.keys(errors).length && !privacyError) return;
     const t = window.setTimeout(() => {
       const el = document.querySelector<HTMLElement>('[data-error], p.text-red-300');
       if (!el) return;
@@ -257,7 +207,7 @@ export const FamilyHappinessMap: React.FC = () => {
       field?.focus({ preventScroll: true });
     }, 120);
     return () => window.clearTimeout(t);
-  }, [errors, privacyError, phoneDuplicate]);
+  }, [errors, privacyError]);
 
   const headingClass = 'font-playfair-heading italic font-medium';
 
@@ -269,7 +219,6 @@ export const FamilyHappinessMap: React.FC = () => {
       else if (birthDateError(formData.birthDate)) errs.birthDate = birthDateError(formData.birthDate)!;
       if (formData.birthTime && !isValidTime24(formData.birthTime)) errs.birthTime = 'Giờ sinh chưa đúng. Hãy nhập theo giờ 24h, ví dụ 17:45, hoặc xóa trống nếu không nhớ.';
       if (!formData.gender) errs.gender = 'Vui lòng chọn giới tính';
-      if (!formData.occupation.trim()) errs.occupation = 'Vui lòng nhập công việc hiện tại';
     }
 
     if (step === 3) {
@@ -299,23 +248,6 @@ export const FamilyHappinessMap: React.FC = () => {
       if (!formData.priorityArea) errs.priorityArea = 'Vui lòng chọn một lĩnh vực ưu tiên';
     }
 
-    if (step === 6) {
-      const phoneRegex = /(84|0[3|5|7|8|9])+([0-9]{8})\b/;
-      if (!formData.phone.trim()) {
-        errs.phone = 'Vui lòng nhập số điện thoại hoặc Zalo';
-      } else if (!phoneRegex.test(formData.phone.replace(/\s+/g, ''))) {
-        errs.phone = 'Số điện thoại chưa đúng định dạng Việt Nam';
-      }
-
-      if (formData.email.trim()) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email.trim())) {
-          errs.email = 'Email chưa đúng định dạng';
-        }
-      }
-
-    }
-
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -337,24 +269,14 @@ export const FamilyHappinessMap: React.FC = () => {
       }
     }
     if (!validateStep(currentStep)) return;
-    if (currentStep === 6) {
-      // Mỗi số điện thoại chỉ làm khảo sát một lần
-      setCheckingPhone(true);
-      const exists = await checkPhoneExists(formData.phone);
-      setCheckingPhone(false);
-      if (exists) {
-        setPhoneDuplicate(true);
-        return;
-      }
-      setPhoneDuplicate(false);
-    }
     if (editingFromReview) {
       setEditingFromReview(false);
       setCurrentStep(7);
       return;
     }
     if (currentStep === 3) setWheelIdx(0);
-    setCurrentStep((prev) => (prev === 1 ? 3 : Math.min(prev + 1, 7)));
+    // Bỏ trang liên hệ (số điện thoại) cũ: bước 5 đi thẳng tới trang xem lại
+    setCurrentStep((prev) => (prev === 1 ? 3 : prev === 5 ? 7 : Math.min(prev + 1, 7)));
   };
 
   // handleNext mới nhất (dùng cho bước tự chuyển sau khi chấm điểm khía cạnh cuối)
@@ -386,7 +308,7 @@ export const FamilyHappinessMap: React.FC = () => {
       return;
     }
     // Kiểm tra lại toàn bộ các bước; nếu có chỗ chưa hợp lệ thì đưa người dùng về đúng bước đó
-    for (const st of [2, 3, 4, 5, 6]) {
+    for (const st of [2, 3, 4, 5]) {
       if (!validateStep(st)) {
         setIsPrivacyStep(false);
         setEditingFromReview(true);
@@ -396,110 +318,35 @@ export const FamilyHappinessMap: React.FC = () => {
       }
     }
     setIsSubmitting(true);
-    const alreadyExists = await checkPhoneExists(formData.phone);
-    if (alreadyExists) {
-      setIsSubmitting(false);
-      setPhoneDuplicate(true);
-      setIsPrivacyStep(false);
-      setEditingFromReview(true);
-      setCurrentStep(6);
-      return;
-    }
-    try {
-      // Tính toán điểm số Bánh xe hạnh phúc
-      const scores = formData.wheelScores;
-      const wheelValues = Object.values(scores);
-      const totalScore = wheelValues.reduce((sum, val) => sum + val, 0);
-      const avgScore = (totalScore / wheelValues.length).toFixed(1);
-      const wheelSummary = `Sức Khỏe: ${scores.health}/10 | Gia Đình: ${scores.family}/10 | Tài Chính: ${scores.finance}/10 | Sự Nghiệp: ${scores.career}/10 | Mối Quan Hệ: ${scores.relationships}/10 | Phát Triển Bản Thân: ${scores.selfDevelopment}/10 | Tinh Thần & Nội Tâm: ${scores.spirituality}/10 | Đóng Góp Xã Hội: ${scores.community}/10 (TB: ${avgScore}/10)`;
-
-      // Danh sách rào cản gộp cả mục Khác nếu có
-      const allObstacles = [...formData.obstacles];
-      if (formData.obstacleOther && formData.obstacleOther.trim()) {
-        allObstacles.push(`Khác: ${formData.obstacleOther.trim()}`);
-      }
-      const obstaclesText = allObstacles.join(', ');
-
-      // Thông tin chi tiết người thân đi kèm
-      const relativesDetail =
+    // Không gửi dữ liệu đi đâu: dựng dữ liệu báo cáo, lưu ngay trên máy rồi chuyển sang /ketqua
+    const allObstacles = [...formData.obstacles];
+    if (formData.obstacleOther.trim()) allObstacles.push(`Khác: ${formData.obstacleOther.trim()}`);
+    const input: ReportInput = {
+      name: formData.fullName.trim(),
+      birthDate: isoToVN(formData.birthDate),
+      birthTime: formData.birthTime,
+      gender: formData.gender,
+      familyTime: formData.familyTime,
+      relatives:
         formData.includeRelatives && formData.relatives.length > 0
-          ? formData.relatives
-              .map(
-                (r, i) =>
-                  `Người ${i + 1}: ${r.name || 'Chưa rõ'} (${r.relationship || 'Người thân'}, ${r.birthDate ? isoToVN(r.birthDate) : 'Chưa rõ NS'}, ${r.gender || 'Chưa rõ GT'})`
-              )
-              .join('; ')
-          : 'Không có';
-
-      // Số chủ đạo thần số học & Tử vi bản mệnh
-      const lifePath = calculateLifePath(formData.birthDate);
-      const tuViData = calculateTuVi(formData.birthDate, formData.gender);
-
-      // Lưu toàn bộ thông tin form /bando vào tab "Quà Tặng Tầng 1"
-      const fullName = formData.fullName.trim();
-      const phone = formData.phone.trim();
-      const email = formData.email.trim();
-      await submitToSheet({
-        sheet: SHEET_TABS.bando,
-        form: 'bando',
-        name: fullName,
-        phone,
-        email,
-        fields: {
-          'Họ Và Tên': fullName,
-          'SĐT': phone,
-          'Email': email,
-          'Ngày sinh': isoToVN(formData.birthDate),
-          'Giờ sinh': formData.birthTime || 'Không rõ',
-          'Giới tính': formData.gender,
-          'Nghề nghiệp': formData.occupation.trim(),
-          'Số chủ đạo': String(lifePath),
-          'Năm Can Chi': tuViData.canChiNam,
-          'Bản Mệnh': tuViData.nguHanh,
-          'Cung Mệnh': tuViData.cungMenh,
-          'Thời gian cho gia đình': formData.familyTime,
-          'Có người thân đi kèm': formData.includeRelatives ? 'Có' : 'Không',
-          'Thông tin người thân': relativesDetail,
-          'Sức Khỏe': `${scores.health}/10`,
-          'Gia Đình': `${scores.family}/10`,
-          'Tài Chính': `${scores.finance}/10`,
-          'Sự Nghiệp': `${scores.career}/10`,
-          'Mối Quan Hệ': `${scores.relationships}/10`,
-          'Phát Triển Bản Thân': `${scores.selfDevelopment}/10`,
-          'Tinh Thần & Nội Tâm': `${scores.spirituality}/10`,
-          'Đóng Góp Xã Hội': `${scores.community}/10`,
-          'Điểm trung bình bánh xe': `${avgScore}/10`,
-          'Bánh xe hạnh phúc': wheelSummary,
-          'Lĩnh vực ưu tiên': formData.priorityArea,
-          'Mong muốn thay đổi': formData.desireChange ? formData.desireChange.trim() : '',
-          'Rào cản lớn nhất': obstaclesText,
-          'Nhận quà tặng giải pháp chi tiết': formData.wantGiftSolution,
-          'Hình thức hỗ trợ': formData.supportMethods.join(', '),
-          'Kênh nhận bản đồ': 'Nhóm Zalo Gieo Hạt',
-          'Đồng ý điều khoản': privacyConsent ? 'Đồng ý' : 'Chưa',
-          // Dữ liệu có cấu trúc để trang /ketqua dựng báo cáo (không phụ thuộc vào cách ghép chuỗi)
-          'Dữ liệu báo cáo': JSON.stringify({
-            relatives:
-              formData.includeRelatives && formData.relatives.length > 0
-                ? formData.relatives.map((r) => ({
-                    name: r.name || '',
-                    relationship: r.relationship || '',
-                    birthDate: r.birthDate ? isoToVN(r.birthDate) : '',
-                    gender: r.gender || '',
-                  }))
-                : [],
-            obstacles: allObstacles,
-            support: formData.supportMethods,
-          }),
-        },
-      });
-    } catch (err) {
-      console.log('Submission note:', err);
-    } finally {
-      setIsSubmitting(false);
-      setIsPrivacyStep(false);
-      setIsCompleted(true);
-    }
+          ? formData.relatives.map((r) => ({
+              name: r.name.trim(),
+              relationship: r.relationship.trim(),
+              birthDate: r.birthDate ? isoToVN(r.birthDate) : '',
+              gender: r.gender || '',
+            }))
+          : [],
+      scores: { ...formData.wheelScores },
+      priority: formData.priorityArea,
+      desire: formData.desireChange.trim(),
+      obstacles: allObstacles,
+      support: formData.supportMethods,
+    };
+    saveResult(input);
+    trackEvent('generate_lead', { form_name: 'bando' });
+    setIsSubmitting(false);
+    window.history.pushState({}, '', '/ketqua');
+    window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
   const addRelative = () => {
@@ -547,46 +394,9 @@ export const FamilyHappinessMap: React.FC = () => {
     });
   };
 
-  const toggleChannel = (channel: string) => {
-    const exists = formData.deliveryChannels.includes(channel);
-    setFormData({
-      ...formData,
-      deliveryChannels: exists
-        ? formData.deliveryChannels.filter((c) => c !== channel)
-        : [...formData.deliveryChannels, channel],
-    });
-  };
-
-  const tuViInfo = useMemo(() => calculateTuVi(formData.birthDate, formData.gender), [formData.birthDate, formData.gender]);
-
-  const radarPoints = useMemo(() => {
-    const scores = [
-      formData.wheelScores.health,
-      formData.wheelScores.family,
-      formData.wheelScores.finance,
-      formData.wheelScores.career,
-      formData.wheelScores.relationships,
-      formData.wheelScores.selfDevelopment,
-      formData.wheelScores.spirituality,
-      formData.wheelScores.community,
-    ];
-
-    const center = 150;
-    const maxRadius = 115;
-    const total = scores.length;
-
-    return scores
-      .map((val, idx) => {
-        const angle = (Math.PI * 2 / total) * idx - Math.PI / 2;
-        const radius = (val / 10) * maxRadius;
-        const x = center + radius * Math.cos(angle);
-        const y = center + radius * Math.sin(angle);
-        return `${x},${y}`;
-      })
-      .join(' ');
-  }, [formData.wheelScores]);
-
-  const activeBgInfo = STEP_BACKGROUNDS[isCompleted ? 8 : currentStep] || STEP_BACKGROUNDS[1];
+  // Số thứ tự bước hiển thị cho người dùng: 1 (về bạn), 2 (gia đình), 3 (bánh xe), 4 (mong muốn), 5 (xem lại)
+  const stepNo = currentStep === 1 ? 1 : currentStep === 7 ? 5 : currentStep - 1;
+  const activeBgInfo = STEP_BACKGROUNDS[currentStep] || STEP_BACKGROUNDS[1];
 
   return (
     <div className="relative min-h-screen text-white font-be-vietnam antialiased flex flex-col selection:bg-[#FA5B13] selection:text-white bg-neutral-950">
@@ -595,7 +405,7 @@ export const FamilyHappinessMap: React.FC = () => {
       {/* ======================================================== */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
         {Object.entries(STEP_BACKGROUNDS).map(([k, item]) => {
-          const active = isCompleted ? k === '8' : isPrivacyStep ? k === '7' : Number(k) === currentStep;
+          const active = isPrivacyStep ? k === '7' : Number(k) === currentStep;
           return (
             <img
               key={k}
@@ -640,31 +450,27 @@ export const FamilyHappinessMap: React.FC = () => {
           {/* Right controls: Tiến trình */}
           <div className="flex items-center gap-3 sm:gap-4">
             {/* Step progress */}
-            {!isCompleted && (
-              <div className="hidden sm:flex items-center gap-2.5">
+            <div className="hidden sm:flex items-center gap-2.5">
                 <span className="text-sm font-bold text-white">
-                  {isPrivacyStep ? 'Bước cuối' : `${currentStep === 1 ? 1 : currentStep - 1}/6`}
+                  {isPrivacyStep ? 'Bước cuối' : `${stepNo}/5`}
                 </span>
                 <div className="w-24 bg-white/25 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-[#FA5B13] h-full transition-all duration-300 rounded-full"
-                    style={{ width: isPrivacyStep ? '100%' : `${(((currentStep === 1 ? 1 : currentStep - 1)) / 6) * 100}%` }}
+                    style={{ width: isPrivacyStep ? '100%' : `${(stepNo / 5) * 100}%` }}
                   />
                 </div>
               </div>
-            )}
           </div>
         </div>
 
         {/* Mobile progress bar */}
-        {!isCompleted && (
-          <div className="sm:hidden w-full bg-white/15 h-1.5">
-            <div
-              className="bg-[#FA5B13] h-full transition-all duration-300"
-              style={{ width: isPrivacyStep ? '100%' : `${(((currentStep === 1 ? 1 : currentStep - 1)) / 6) * 100}%` }}
-            />
-          </div>
-        )}
+        <div className="sm:hidden w-full bg-white/15 h-1.5">
+          <div
+            className="bg-[#FA5B13] h-full transition-all duration-300"
+            style={{ width: isPrivacyStep ? '100%' : `${(stepNo / 5) * 100}%` }}
+          />
+        </div>
       </header>
 
       {/* ======================================================== */}
@@ -672,8 +478,8 @@ export const FamilyHappinessMap: React.FC = () => {
       {/* ======================================================== */}
       <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto px-4 sm:px-8 pt-6 sm:pt-12 pb-4 sm:pb-12">
         {/* DÒNG TRÍCH DẪN DANCING SCRIPT TRÊN NỀN ẢNH VŨ TRỤ/THIÊN NHIÊN (CHỮ LỚN) */}
-        <div key={`quote-${isCompleted ? 8 : isPrivacyStep ? 'privacy' : currentStep}`} className="mb-8 pb-4 border-b border-white/15 text-center sm:text-left animate-fade">
-          {currentStep === 1 && !isPrivacyStep && !isCompleted && (
+        <div key={`quote-${isPrivacyStep ? 'privacy' : currentStep}`} className="mb-8 pb-4 border-b border-white/15 text-center sm:text-left animate-fade">
+          {currentStep === 1 && !isPrivacyStep && (
             <h2 className="text-3xl sm:text-5xl font-black text-white tracking-widest uppercase mb-2 font-be-vietnam drop-shadow-lg">
               QUÀ TẶNG
             </h2>
@@ -684,160 +490,7 @@ export const FamilyHappinessMap: React.FC = () => {
         </div>
 
         {/* VIEW KHI HOÀN TẤT */}
-        {isCompleted ? (
-          <div className="space-y-14 animate-fade">
-            <AiDisclaimer />
-
-            {/* Lời cảm ơn */}
-            <header className="space-y-4">
-              <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Hoàn tất khảo sát</p>
-              <h1 className={`text-3xl sm:text-5xl text-white leading-[1.2] ${headingClass} [text-wrap:balance]`}>
-                Bản đồ hạnh phúc của bạn đã sẵn sàng
-              </h1>
-              <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[56ch]">
-                Cảm ơn {formData.fullName.trim() ? <strong className="font-semibold text-white">{formData.fullName.trim()}</strong> : 'bạn'} đã dành thời gian nhìn lại chính mình và gia đình.
-                Bước cuối cùng: vui lòng tham gia <strong className="font-semibold text-[#FFA877]">nhóm Zalo Gieo Hạt</strong> để được nhận kết quả phân tích tử vi và thần số học chi tiết.
-              </p>
-            </header>
-
-            {/* Nhóm Zalo Gieo Hạt: cửa sổ tự mở khi đọc đến cuối trang */}
-            <ZaloPopups />
-
-            {/* Thông tin cơ bản */}
-            <section className="space-y-5">
-              <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Thông tin của bạn</h2>
-              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5 text-sm sm:text-base">
-                {[
-                  ['Họ và tên', formData.fullName.trim() || 'Không ghi'],
-                  ['Giới tính', formData.gender],
-                  ['Ngày sinh', isoToVN(formData.birthDate)],
-                  ['Giờ sinh', formData.birthTime || 'Không rõ'],
-                  ['Nghề nghiệp', formData.occupation || 'Chưa cập nhật'],
-                  ['Zalo', formData.phone],
-                  ['Email', formData.email || 'Không có'],
-                ].map(([k, v]) => (
-                  <div key={k} className="min-w-0">
-                    <dt className="text-white/55 text-xs sm:text-sm">{k}</dt>
-                    <dd className="mt-1 font-semibold text-white break-words">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-
-            {/* Tử vi — bản xem nhanh */}
-            <section className="space-y-6">
-              <div className="flex items-baseline justify-between gap-4">
-                <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Tử vi & bản mệnh</h2>
-                <span className="text-sm text-white/60">{tuViInfo.amDuong}</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-white/55 text-sm">Năm sinh Can Chi</p>
-                  <p className={`mt-1 text-2xl sm:text-3xl text-white ${headingClass}`}>
-                    {tuViInfo.canChiNam} <span className="text-white/50 text-lg sm:text-xl">· {tuViInfo.namSinh}</span>
-                  </p>
-                </div>
-                <div>
-                  <p className="text-white/55 text-sm">Bản mệnh (Ngũ hành nạp âm)</p>
-                  <p className={`mt-1 text-2xl sm:text-3xl text-[#FFA877] ${headingClass}`}>{tuViInfo.nguHanh}</p>
-                </div>
-              </div>
-              <p className="text-base sm:text-lg text-white/85 leading-relaxed max-w-[60ch]">
-                Đây mới là bản xem nhanh. Muốn nhận thêm phần luận giải{' '}
-                <span className="text-white/60">Cung Phi Bát Trạch, Cung Mệnh & Thân, Cung Phu Thê, Cung Tài Bạch</span>,
-                vui lòng tham gia <strong className="font-semibold text-white">nhóm Zalo Gieo Hạt</strong> để được nhận kết quả phân tích chi tiết.
-              </p>
-            </section>
-
-            {/* Bánh xe hạnh phúc */}
-            <section className="space-y-6">
-              <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Bánh xe hạnh phúc</h2>
-              <div className="flex flex-col md:flex-row items-center gap-8 md:gap-10">
-                <div className="relative w-[280px] sm:w-[300px] h-[280px] sm:h-[300px] shrink-0 mx-auto">
-                  <svg width="280" height="280" viewBox="0 0 300 300" className="overflow-visible">
-                    {[0.2, 0.4, 0.6, 0.8, 1.0].map((level, lIdx) => {
-                      const pts = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-                        const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-                        const r = 115 * level;
-                        return `${150 + r * Math.cos(angle)},${150 + r * Math.sin(angle)}`;
-                      }).join(' ');
-                      return (
-                        <polygon
-                          key={lIdx}
-                          points={pts}
-                          fill="none"
-                          stroke="rgba(255, 255, 255, 0.18)"
-                          strokeWidth="1"
-                        />
-                      );
-                    })}
-
-                    {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-                      const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-                      const x2 = 150 + 115 * Math.cos(angle);
-                      const y2 = 150 + 115 * Math.sin(angle);
-                      return (
-                        <line
-                          key={i}
-                          x1="150"
-                          y1="150"
-                          x2={x2}
-                          y2={y2}
-                          stroke="rgba(255, 255, 255, 0.18)"
-                          strokeWidth="1"
-                        />
-                      );
-                    })}
-
-                    <polygon
-                      points={radarPoints}
-                      fill="rgba(250, 91, 19, 0.35)"
-                      stroke="#FA5B13"
-                      strokeWidth="2.5"
-                    />
-
-                    {LIFE_AREAS.map((area, i) => {
-                      const score = formData.wheelScores[area.key as keyof typeof formData.wheelScores];
-                      const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-                      const r = (score / 10) * 115;
-                      const x = 150 + r * Math.cos(angle);
-                      const y = 150 + r * Math.sin(angle);
-                      return (
-                        <circle
-                          key={i}
-                          cx={x}
-                          cy={y}
-                          r="4.5"
-                          fill="#FFFFFF"
-                          stroke="#FA5B13"
-                          strokeWidth="2"
-                        />
-                      );
-                    })}
-                  </svg>
-                </div>
-                <ul className="w-full space-y-3.5">
-                  {LIFE_AREAS.map((area) => {
-                    const score = formData.wheelScores[area.key as keyof typeof formData.wheelScores];
-                    return (
-                      <li key={area.key} className="flex items-center justify-between gap-3 text-sm sm:text-base">
-                        <span className="text-white/90 truncate">{area.label}</span>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <div className="w-24 sm:w-28 bg-white/15 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-[#FA5B13] h-full rounded-full" style={{ width: `${score * 10}%` }} />
-                          </div>
-                          <span className="font-semibold text-white w-10 text-right tabular-nums">{score}/10</span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            </section>
-
-            <div className="text-center"><ZaloOpenButton /></div>
-          </div>
-        ) : (
+        {(
           /* LINEAR MULTI-STEP QUESTIONS - CHỮ LỚN RÕ RÀNG */
           <div className="space-y-10">
             {/* TRANG 1: GIỚI THIỆU */}
@@ -917,7 +570,7 @@ export const FamilyHappinessMap: React.FC = () => {
                       <span>Những thông tin nào được thu thập?</span>
                     </h3>
                     <p className="text-sm sm:text-base text-white/80 pl-5">
-                      Bạn có thể được yêu cầu cung cấp họ tên, ngày sinh, giờ sinh, giới tính và câu trả lời khảo sát về cuộc sống, gia đình.
+                      Họ tên, ngày sinh, giờ sinh, giới tính và câu trả lời khảo sát về cuộc sống, gia đình. Khảo sát không hỏi số điện thoại, email hay nghề nghiệp.
                     </p>
                     <p className="text-sm sm:text-base text-white/80 pl-5">
                       Họ tên là thông tin không bắt buộc. Các thông tin khác chỉ nên được yêu cầu khi thực sự cần thiết cho nội dung bạn lựa chọn.
@@ -930,7 +583,7 @@ export const FamilyHappinessMap: React.FC = () => {
                       <span>Thông tin được sử dụng vào mục đích gì?</span>
                     </h3>
                     <p className="text-sm sm:text-base text-white/80 pl-5">
-                      Thông tin được sử dụng để chuẩn bị nội dung Bản Đồ Hạnh Phúc, Tử vi và Thần số học theo yêu cầu của bạn.
+                      Thông tin chỉ dùng để lập Bản Đồ Hạnh Phúc, Tử vi và Thần số học cho bạn. Toàn bộ được xử lý và lưu ngay trên trình duyệt của bạn, không gửi về máy chủ hay cho bất kỳ ai. Bạn chỉ chia sẻ khi tự gửi link kết quả cho người khác.
                     </p>
                   </div>
 
@@ -940,7 +593,7 @@ export const FamilyHappinessMap: React.FC = () => {
                       <span>Bạn có quyền lựa chọn không?</span>
                     </h3>
                     <p className="text-sm sm:text-base text-white/80 pl-5">
-                      Bạn có quyền cân nhắc trước khi cung cấp thông tin, bỏ qua những nội dung không bắt buộc và liên hệ để hỏi về việc sử dụng dữ liệu của mình.
+                      Bạn có quyền cân nhắc trước khi cung cấp thông tin và bỏ qua những nội dung không bắt buộc. Muốn xóa kết quả khỏi máy, bạn chỉ cần xóa dữ liệu duyệt web của trang này.
                     </p>
                   </div>
                 </div>
@@ -958,7 +611,7 @@ export const FamilyHappinessMap: React.FC = () => {
                       className="mt-1.5 accent-[#FA5B13] w-5 h-5 shrink-0"
                     />
                     <span className="[text-wrap:balance]">
-                      Tôi đã đọc, hiểu rõ và đồng ý cho phép thu thập, xử lý thông tin cá nhân theo đúng Chính sách Quyền riêng tư nêu trên.
+                      Tôi đã đọc, hiểu rõ và đồng ý để trang xử lý thông tin của tôi ngay trên trình duyệt theo Chính sách Quyền riêng tư nêu trên.
                     </span>
                   </label>
                   {privacyError && <p data-error className="text-sm text-red-300 font-semibold pl-8">{privacyError}</p>}
@@ -980,11 +633,11 @@ export const FamilyHappinessMap: React.FC = () => {
 
                   <button type="button" disabled={isSubmitting} onClick={() => handleSubmit()} className={BTN_PRIMARY}>
                     {isSubmitting ? (
-                      <span>Đang gửi...</span>
+                      <span>Đang lập bản đồ...</span>
                     ) : (
                       <>
-                        <span className="sm:hidden">Đồng Ý & Gửi</span>
-                        <span className="hidden sm:inline">Đồng Ý & Gửi Khảo Sát</span>
+                        <span className="sm:hidden">Đồng Ý & Xem Kết Quả</span>
+                        <span className="hidden sm:inline">Đồng Ý & Xem Kết Quả</span>
                         <ArrowRight className="w-5 h-5" />
                       </>
                     )}
@@ -1081,20 +734,6 @@ export const FamilyHappinessMap: React.FC = () => {
                     {errors.gender && <p className="text-sm text-red-300 font-medium">{errors.gender}</p>}
                   </div>
 
-                  {/* Công việc */}
-                  <div className="space-y-2 pt-1">
-                    <label className="block text-base sm:text-lg font-semibold text-white">
-                      5. Bạn hiện đang làm công việc gì? <span className="text-[#FA5B13]">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.occupation}
-                      onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
-                      placeholder="Kinh doanh, Tự do, Nghỉ hưu, Nội trợ, Văn phòng..."
-                      className="w-full py-3 sm:py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white transition-all bg-black/35 backdrop-blur-xs placeholder:text-white/60"
-                    />
-                    {errors.occupation && <p className="text-sm text-red-300 font-medium">{errors.occupation}</p>}
-                  </div>
                 </div>
               </div>
             )}
@@ -1118,7 +757,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 7 */}
                   <div className="space-y-3">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      6. Gia đình bạn có thường xuyên dành thời gian chất lượng cùng nhau không? <span className="text-[#FA5B13]">*</span>
+                      5. Gia đình bạn có thường xuyên dành thời gian chất lượng cùng nhau không? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                       {['Thường xuyên', 'Thỉnh thoảng', 'Hiếm khi', 'Gần như không'].map((opt) => (
@@ -1142,7 +781,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 8: Khai báo người thân */}
                   <div className="space-y-3 pt-3 border-t border-white/15">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      7. Bạn có muốn nhận thêm gợi ý kết nối cho những người thân đang sống cùng không? <span className="text-[#FA5B13]">*</span>
+                      6. Bạn có muốn nhận thêm gợi ý kết nối cho những người thân đang sống cùng không? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <p className="text-base text-white font-normal">
                       Mỗi người chỉ cần 4 thông tin ngắn. Tối đa 10 người thân trong gia đình (vợ/chồng, con, cha/mẹ, anh chị em, ông bà…). Mỗi người sẽ có một phần báo cáo chi tiết riêng.
@@ -1403,7 +1042,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 17 */}
                   <div className="space-y-2.5">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      16. Nếu chỉ cải thiện một lĩnh vực trong 90 ngày tới, bạn sẽ chọn lĩnh vực nào? <span className="text-[#FA5B13]">*</span>
+                      15. Nếu chỉ cải thiện một lĩnh vực trong 90 ngày tới, bạn sẽ chọn lĩnh vực nào? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <select
                       value={formData.priorityArea}
@@ -1421,7 +1060,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 18: Rào cản */}
                   <div className="space-y-3 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      17. Điều gì đang cản trở bạn thay đổi? <span className="text-white font-normal text-sm sm:text-base">(chọn nhiều)</span>
+                      16. Điều gì đang cản trở bạn thay đổi? <span className="text-white font-normal text-sm sm:text-base">(chọn nhiều)</span>
                     </label>
                     <div className="flex flex-wrap gap-2.5">
                       {OBSTACLE_OPTIONS.map((item) => (
@@ -1444,7 +1083,7 @@ export const FamilyHappinessMap: React.FC = () => {
                   {/* Câu 19: Tặng thêm bộ quà tặng giải pháp chi tiết */}
                   <div className="space-y-3 pt-1">
                     <label className="block text-base sm:text-lg font-semibold text-white [text-wrap:balance]">
-                      18. Bạn có muốn nhận thêm bộ quà tặng giải pháp chi tiết cho vấn đề cá nhân của bạn không? <span className="text-[#FA5B13]">*</span>
+                      17. Bạn có muốn nhận thêm bộ quà tặng giải pháp chi tiết cho vấn đề cá nhân của bạn không? <span className="text-[#FA5B13]">*</span>
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <button
@@ -1476,86 +1115,13 @@ export const FamilyHappinessMap: React.FC = () => {
             )}
 
             {/* TRANG 6: NHẬN BẢN ĐỒ HẠNH PHÚC */}
-            {currentStep === 6 && (
-              <div key="step-6" className="space-y-8 animate-fade">
-                <div className="space-y-2.5">
-                  <div className="flex items-baseline gap-2.5">
-                    <span className={`text-4xl sm:text-5xl font-bold text-[#FA5B13] ${headingClass}`}>05</span>
-                    <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-widest">
-                      BƯỚC CUỐI CÙNG
-                    </span>
-                  </div>
-                  <h2 className={`text-2xl sm:text-4xl text-white ${headingClass} [text-wrap:balance]`}>
-                    Nhận Giải Pháp Nâng Cao Hạnh Phúc
-                  </h2>
-                  <p className="text-base text-white pt-1 font-normal">
-                    Nhận bản đồ và tài liệu
-                  </p>
-                </div>
-
-                <div className="space-y-7 border-t border-white/15 pt-6">
-                  {/* SĐT / Zalo */}
-                  <div className="space-y-2">
-                    <label className="block text-base sm:text-lg font-semibold text-white">
-                      19. Số điện thoại / Zalo để nhận báo cáo & quà tặng <span className="text-[#FA5B13]">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => {
-                        setFormData({ ...formData, phone: e.target.value });
-                        if (phoneDuplicate) setPhoneDuplicate(false);
-                      }}
-                      onBlur={async () => {
-                        const raw = formData.phone.replace(/\s+/g, '');
-                        if (!/(84|0[3|5|7|8|9])+([0-9]{8})\b/.test(raw)) return;
-                        const exists = await checkPhoneExists(raw);
-                        if (exists) setPhoneDuplicate(true);
-                      }}
-                      placeholder="0901234567"
-                      className="w-full py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white bg-black/35 placeholder:text-white/60"
-                    />
-                    {errors.phone && <p className="text-sm text-red-300 font-medium">{errors.phone}</p>}
-                    {phoneDuplicate && (
-                      <p role="alert" className="text-sm sm:text-base text-red-200 font-medium leading-relaxed">
-                        Số điện thoại này đã làm khảo sát rồi, mỗi số chỉ làm được một lần. Bạn có thể xem kết quả của mình tại{' '}
-                        <a href="/ketqua" className="underline underline-offset-4 text-white">trang kết quả</a>, hoặc dùng một số điện thoại khác.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Email */}
-                  <div className="space-y-2 pt-1">
-                    <label className="block text-base sm:text-lg font-semibold text-white">
-                      20. Email <span className="text-white font-normal text-sm sm:text-base">(không bắt buộc)</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="ban@gmail.com"
-                      className="w-full py-3.5 px-4 rounded-xl border border-white/25 focus:border-[#FA5B13] outline-none text-base sm:text-lg text-white bg-black/35 placeholder:text-white/60"
-                    />
-                    {errors.email && <p className="text-sm text-red-300 font-medium">{errors.email}</p>}
-                  </div>
-
-                  {/* Quote cam kết bảo mật & quyền dữ liệu cá nhân */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-black/45 border border-white/20 text-sm sm:text-base text-white/95 leading-relaxed font-normal shadow-inner">
-                    <p className="italic">
-                      "Chúng tôi cam kết thông tin được bảo mật 100% và chỉ dùng cho khảo sát giải pháp nâng cao hạnh phúc, bạn có thể từ chối cung cấp thông tin không bắt buộc và thực hiện các quyền liên quan đến dữ liệu cá nhân theo quy định pháp luật."
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* TRANG 7: XEM LẠI TRƯỚC KHI GỬI */}
             {currentStep === 7 && !isPrivacyStep && (
               <div key="step-7" className="space-y-9 animate-fade">
                 <div className="space-y-2.5">
                   <div className="flex items-baseline gap-2.5">
-                    <span className={`text-4xl sm:text-5xl font-bold text-[#FA5B13] ${headingClass}`}>06</span>
-                    <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-widest">XEM LẠI TRƯỚC KHI GỬI</span>
+                    <span className={`text-4xl sm:text-5xl font-bold text-[#FA5B13] ${headingClass}`}>05</span>
+                    <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-widest">XEM LẠI TRƯỚC KHI XEM KẾT QUẢ</span>
                   </div>
                   <h2 className={`text-2xl sm:text-4xl text-white ${headingClass} [text-wrap:balance]`}>
                     Kiểm tra lại thông tin của bạn
@@ -1582,7 +1148,6 @@ export const FamilyHappinessMap: React.FC = () => {
                         ['Ngày sinh (dương lịch)', isoToVN(formData.birthDate)],
                         ['Giờ sinh', formData.birthTime || 'Không rõ'],
                         ['Giới tính', formData.gender],
-                        ['Công việc', formData.occupation.trim()],
                       ],
                     },
                     {
@@ -1607,14 +1172,6 @@ export const FamilyHappinessMap: React.FC = () => {
                         ['Rào cản lớn nhất', allObstacles.length ? allObstacles.join(', ') : 'Không chọn'],
                         ['Nhận giải pháp chi tiết', formData.wantGiftSolution],
                         ['Cách muốn được hỗ trợ', formData.supportMethods.length ? formData.supportMethods.join(', ') : 'Không chọn'],
-                      ],
-                    },
-                    {
-                      title: 'Liên hệ',
-                      step: 6,
-                      rows: [
-                        ['Số điện thoại / Zalo', formData.phone.trim()],
-                        ['Email', formData.email.trim() || 'Không có'],
                       ],
                     },
                   ];
@@ -1642,15 +1199,8 @@ export const FamilyHappinessMap: React.FC = () => {
                   ));
                 })()}
 
-                {phoneDuplicate && (
-                  <p role="alert" className="text-base text-red-200 font-medium leading-relaxed">
-                    Số điện thoại này đã làm khảo sát rồi, mỗi số chỉ làm được một lần. Bạn có thể xem kết quả tại{' '}
-                    <a href="/ketqua" className="underline underline-offset-4 text-white">trang kết quả</a>, hoặc bấm “Sửa phần này” ở mục Liên hệ để dùng số khác.
-                  </p>
-                )}
-
                 <div className={ACTION_BAR}>
-                  <button type="button" onClick={() => setCurrentStep(6)} className={BTN_BACK}>
+                  <button type="button" onClick={() => setCurrentStep(5)} className={BTN_BACK}>
                     <ArrowLeft className="w-4 h-4" />
                     <span>Quay lại</span>
                   </button>
@@ -1681,17 +1231,15 @@ export const FamilyHappinessMap: React.FC = () => {
                   </button>
                 )}
 
-                <button type="button" onClick={handleNext} disabled={checkingPhone} className={BTN_PRIMARY}>
+                <button type="button" onClick={handleNext} className={BTN_PRIMARY}>
                   <span>
-                    {checkingPhone
-                      ? 'Đang kiểm tra...'
-                      : editingFromReview
-                        ? 'Lưu & quay lại trang xem lại'
-                        : currentStep === 4 && wheelIdx < LIFE_AREAS.length - 1
-                          ? 'Tiếp theo'
-                          : currentStep === 6
-                            ? 'Xem lại thông tin'
-                            : 'Tiếp tục'}
+                    {editingFromReview
+                      ? 'Lưu & quay lại trang xem lại'
+                      : currentStep === 4 && wheelIdx < LIFE_AREAS.length - 1
+                        ? 'Tiếp theo'
+                        : currentStep === 5
+                          ? 'Xem lại thông tin'
+                          : 'Tiếp tục'}
                   </span>
                   <ArrowRight className="w-4 h-4" />
                 </button>

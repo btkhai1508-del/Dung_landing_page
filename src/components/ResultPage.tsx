@@ -1,88 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { GOOGLE_SCRIPT_URL } from '../lib/submitToSheet';
-import { buildReport, parseBirthDate, Report, ReportInput, RelativeInput } from '../lib/report';
-import { AREAS, AreaKey } from '../data/lifeWheel';
-import { ZaloPopups, ZaloOpenButton, ZALO_GROUP_LINK } from './ZaloPopup';
+import { buildReport, Report } from '../lib/report';
+import { loadResult, buildResultLink } from '../lib/savedResult';
+import { ZaloPopups, ZaloOpenButton } from './ZaloPopup';
 import { AiDisclaimer } from './AiDisclaimer';
 
-// ---------- Tra cứu dữ liệu từ Apps Script ----------
-interface LookupRecord {
-  code: string;
-  name: string;
-  birthDate: string;
-  birthTime: string;
-  gender: string;
-  city: string;
-  occupation: string;
-  familyTime: string;
-  scores: Partial<Record<AreaKey, number | null>>;
-  priority: string;
-  desire: string;
-  obstacles: string[];
-  support: string[];
-  relatives: RelativeInput[];
-  relativesText: string;
-}
+// Trang /ketqua: hiện báo cáo từ kết quả khảo sát /bando đã lưu NGAY TRÊN MÁY người dùng
+// (hoặc từ link riêng #r=...). Không tra cứu, không gửi dữ liệu đi đâu.
 
-type LookupError = 'invalid' | 'notfound' | 'locked' | 'network' | 'format';
-
-function parseRelativesText(text: string): RelativeInput[] {
-  const out: RelativeInput[] = [];
-  const re = /Người \d+: (.*?) \((.*?), (\d{2}\/\d{2}\/\d{4}|\d{4}-\d{2}-\d{2}|Chưa rõ NS), (Nam|Nữ|Chưa rõ GT)\)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text || ''))) {
-    out.push({ name: m[1], relationship: m[2], birthDate: m[3] === 'Chưa rõ NS' ? '' : m[3], gender: m[4] === 'Chưa rõ GT' ? '' : m[4] });
-  }
-  return out;
-}
-
-async function fetchRecord(phone: string): Promise<{ record?: LookupRecord; error?: LookupError; gated?: boolean }> {
-  try {
-    const url = `${GOOGLE_SCRIPT_URL}?action=result&phone=${encodeURIComponent(phone)}`;
-    const res = await fetch(url, { method: 'GET' });
-    const data = await res.json();
-    // Chưa được quản trị viên duyệt (hoặc bị từ chối): chỉ yêu cầu vào nhóm Zalo, không trả dữ liệu
-    if (data && data.ok && data.approved === false) return { gated: true };
-    if (data && data.ok && data.record) return { record: data.record as LookupRecord };
-    return { error: (data && data.error) as LookupError || 'notfound' };
-  } catch {
-    return { error: 'network' };
-  }
-}
-
-function toInput(r: LookupRecord): ReportInput {
-  const relatives = (r.relatives && r.relatives.length ? r.relatives : parseRelativesText(r.relativesText)).filter(
-    (x) => parseBirthDate(x.birthDate)
-  );
-  const scores: Partial<Record<AreaKey, number>> = {};
-  AREAS.forEach((a) => {
-    const v = r.scores?.[a.key];
-    if (typeof v === 'number') scores[a.key] = v;
-  });
-  return {
-    name: r.name,
-    code: r.code,
-    birthDate: r.birthDate,
-    birthTime: r.birthTime,
-    gender: r.gender,
-    city: r.city,
-    occupation: r.occupation,
-    familyTime: r.familyTime,
-    relatives,
-    scores,
-    priority: r.priority,
-    desire: r.desire,
-    obstacles: r.obstacles || [],
-    support: r.support || [],
-  };
-}
-
-const ERROR_TEXT: Record<LookupError, string> = {
-  invalid: 'Vui lòng nhập đúng số điện thoại bạn đã dùng khi làm khảo sát.',
-  notfound: 'Chưa tìm thấy kết quả của số điện thoại này. Hãy kiểm tra lại số, hoặc làm khảo sát Bản Đồ Hạnh Phúc trước.',
-  locked: 'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau khoảng 1 giờ.',
-  network: 'Chưa kết nối được tới hệ thống. Vui lòng kiểm tra mạng và thử lại.',
-  format: 'Dữ liệu của bạn chưa đủ để lập báo cáo (thiếu ngày sinh). Vui lòng liên hệ ban hỗ trợ.',
+// Làm lại khảo sát: kết quả cũ vẫn giữ cho tới khi gửi khảo sát mới (bản mới sẽ ghi đè)
+const goToBando = () => {
+  window.history.pushState({}, '', '/bando');
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  window.scrollTo({ top: 0 });
 };
 
 // ---------- Giao diện ----------
@@ -90,8 +19,6 @@ const BG = 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=fo
 const heading = 'font-playfair-heading italic font-medium';
 const eyebrow = 'text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]';
 const soft = 'rounded-2xl bg-white/[0.05] p-5 sm:p-6';
-const inputCls =
-  'w-full py-3.5 px-4 rounded-2xl bg-black/35 text-white text-lg tracking-wide placeholder:text-white/40 outline-none focus:ring-2 focus:ring-[#FA5B13]/70 transition';
 
 const Section: React.FC<{ id: string; label: string; title: string; intro?: string; children: React.ReactNode }> = ({ id, label, title, intro, children }) => (
   <section id={id} className="scroll-mt-24 space-y-8">
@@ -233,43 +160,14 @@ const TuViChart: React.FC<{ report: Report }> = ({ report }) => {
 
 // ---------- Trang chính ----------
 export const ResultPage: React.FC = () => {
-  const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<LookupError | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
-  const [gated, setGated] = useState(false);
+  const [report] = useState<Report | null>(() => {
+    const input = loadResult();
+    return input ? buildReport(input) : null;
+  });
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [report]);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const p = phone.replace(/\D/g, '');
-    if (p.length < 9) {
-      setError('invalid');
-      return;
-    }
-    setError(null);
-    setLoading(true);
-    const res = await fetchRecord(p);
-    setLoading(false);
-    if (res.gated) {
-      setGated(true);
-      return;
-    }
-    if (!res.record) {
-      setError(res.error || 'notfound');
-      return;
-    }
-    const built = buildReport(toInput(res.record));
-    if (!built) {
-      setError('format');
-      return;
-    }
-    setGated(false);
-    setReport(built);
-  };
+    window.scrollTo({ top: 0 });
+  }, []);
 
   const shell = (children: React.ReactNode) => (
     <div className="relative min-h-screen w-full text-white font-be-vietnam bg-[#0d0f14]">
@@ -281,86 +179,69 @@ export const ResultPage: React.FC = () => {
     </div>
   );
 
-  // ----- Chưa được duyệt: cần vào nhóm Zalo -----
-  if (gated && !report) {
-    return shell(
-      <main className="min-h-screen flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md space-y-7 text-center">
-          <div className="space-y-3">
-            <p className={eyebrow}>Dũng Gieo Hạt</p>
-            <h1 className={`text-3xl sm:text-4xl text-white leading-[1.2] ${heading}`}>
-              Vui lòng tham gia nhóm Zalo Gieo Hạt để được nhận kết quả
-            </h1>
-            <p className="text-base text-white/75 leading-relaxed">
-              Cảm ơn bạn đã làm khảo sát. Kết quả của bạn sẽ được mở sau khi bạn vào nhóm Zalo Gieo Hạt và được xác nhận. Bạn vào nhóm rồi quay lại đây kiểm tra sau ít phút nhé.
-            </p>
-          </div>
-          <img
-            src="/assets/zalo-gh3-qr.jpg"
-            alt="Mã QR vào nhóm Zalo Gieo Hạt"
-            width={208}
-            height={208}
-            className="mx-auto h-[208px] w-[208px] rounded-2xl bg-white object-contain p-2"
-          />
-          <a
-            href={ZALO_GROUP_LINK}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] py-4 text-base font-bold text-white transition"
-          >
-            Vào nhóm Zalo Gieo Hạt
-          </a>
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => submit(e as unknown as React.FormEvent)}
-              disabled={loading}
-              className="text-sm font-semibold text-[#FFB48A] hover:text-white underline underline-offset-4 transition cursor-pointer disabled:opacity-60"
-            >
-              {loading ? 'Đang kiểm tra…' : 'Mình đã vào nhóm, kiểm tra lại'}
-            </button>
-            <button type="button" onClick={() => setGated(false)} className="text-sm text-white/55 hover:text-white transition cursor-pointer">
-              Nhập số điện thoại khác
-            </button>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // ----- Màn tra cứu -----
+  // ----- Chưa có kết quả trên máy này -----
   if (!report) {
     return shell(
       <main className="min-h-screen flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md space-y-8">
-          <header className="space-y-3 text-center">
+        <div className="w-full max-w-md space-y-7 text-center">
+          <header className="space-y-3">
             <p className={eyebrow}>Dũng Gieo Hạt</p>
             <h1 className={`text-4xl sm:text-5xl text-white leading-[1.15] ${heading}`}>Kết quả của bạn</h1>
             <p className="text-base text-white/70 leading-relaxed">
-              Nhập số điện thoại bạn đã dùng khi làm khảo sát để mở bản đồ hạnh phúc cá nhân của bạn.
+              Chưa tìm thấy kết quả trên máy này. Kết quả được lưu ngay trên trình duyệt bạn đã dùng để làm khảo sát,
+              hoặc trong link kết quả riêng bạn đã sao chép.
             </p>
           </header>
-          <form onSubmit={submit} className="space-y-5" noValidate>
-            <div className="space-y-2">
-              <label htmlFor="rp-phone" className="block text-sm font-semibold text-white/80">Số điện thoại</label>
-              <input id="rp-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="09xx xxx xxx" value={phone}
-                onChange={(e) => setPhone(e.target.value)} className={inputCls} />
-            </div>
-            {error && <p role="alert" className="text-sm text-red-300 font-medium leading-relaxed">{ERROR_TEXT[error]}</p>}
-            <button type="submit" disabled={loading}
-              className="w-full py-4 rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] disabled:opacity-60 text-white text-base font-bold tracking-wide transition cursor-pointer">
-              {loading ? 'Đang tra cứu…' : 'Xem kết quả'}
-            </button>
-          </form>
-          <p className="text-center text-xs text-white/45 leading-relaxed">
-            Báo cáo chỉ mở được bằng đúng số điện thoại bạn đã đăng ký. Chưa làm khảo sát? Hãy vào trang Bản Đồ Hạnh Phúc để bắt đầu.
+          <button
+            onClick={goToBando}
+            className="w-full py-4 rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] text-white text-base font-bold tracking-wide transition cursor-pointer"
+          >
+            Làm khảo sát Bản Đồ Hạnh Phúc
+          </button>
+          <p className="text-xs text-white/45 leading-relaxed">
+            Đã làm trên máy khác? Hãy mở link kết quả riêng bạn đã lưu, hoặc làm lại khảo sát trên máy này.
           </p>
         </div>
       </main>
     );
   }
 
-  return shell(<ReportView report={report} onBack={() => setReport(null)} />);
+  return shell(<ReportView report={report} />);
+};
+
+// Nút sao chép link kết quả riêng (mở được trên máy khác / gửi qua Zalo)
+const CopyLinkButton: React.FC = () => {
+  const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle');
+  const [link, setLink] = useState('');
+  const copy = async () => {
+    const input = loadResult();
+    if (!input) return;
+    const url = buildResultLink(input);
+    setLink(url);
+    try {
+      await navigator.clipboard.writeText(url);
+      setState('copied');
+    } catch {
+      setState('manual');
+    }
+  };
+  return (
+    <div className="w-full space-y-2">
+      <button onClick={copy} className="rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] px-5 py-2.5 text-sm font-semibold transition cursor-pointer">
+        {state === 'copied' ? 'Đã sao chép link kết quả ✓' : 'Sao chép link kết quả'}
+      </button>
+      {state !== 'idle' && (
+        <p className="text-sm text-white/65 leading-relaxed max-w-[62ch]">
+          {state === 'copied'
+            ? 'Hãy lưu link này (ví dụ gửi vào Zalo của chính bạn) để mở lại kết quả trên máy khác. Link chứa thông tin khảo sát của bạn, chỉ chia sẻ với người bạn tin tưởng.'
+            : 'Không tự sao chép được, bạn hãy chọn và sao chép link dưới đây:'}
+        </p>
+      )}
+      {state === 'manual' && (
+        <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="w-full rounded-xl bg-black/40 px-3 py-2 text-xs text-white/80" />
+      )}
+    </div>
+  );
 };
 
 // ---------- Chip mức điểm & loại liên kết (Bánh xe cuộc đời) ----------
@@ -506,7 +387,7 @@ const NAV = [
   ['ke-hoach', 'Kế hoạch'],
 ];
 
-const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: r, onBack }) => {
+const ReportView: React.FC<{ report: Report }> = ({ report: r }) => {
   const n = r.numerology;
   const lp = n.lifePath;
   const t = r.tuvi;
@@ -561,9 +442,10 @@ const ReportView: React.FC<{ report: Report; onBack: () => void }> = ({ report: 
             <button onClick={() => window.print()} className="rounded-full bg-white/10 hover:bg-white/15 px-5 py-2.5 text-sm font-semibold transition cursor-pointer">
               In / lưu thành PDF
             </button>
-            <button onClick={onBack} className="rounded-full px-5 py-2.5 text-sm text-white/60 hover:text-white transition cursor-pointer">
-              Tra cứu số khác
+            <button onClick={goToBando} className="rounded-full px-5 py-2.5 text-sm text-white/60 hover:text-white transition cursor-pointer">
+              Làm lại khảo sát
             </button>
+            <CopyLinkButton />
           </div>
         </section>
 
