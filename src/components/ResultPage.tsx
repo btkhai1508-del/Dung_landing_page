@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { buildReport, Report } from '../lib/report';
-import { loadResult, buildResultLink, openedFromLink } from '../lib/savedResult';
-import { ZaloPopups, ZaloOpenButton, ZALO_GROUP_LINK } from './ZaloPopup';
-import { tryUnlock } from '../lib/unlock';
+import { loadResult } from '../lib/savedResult';
+import { ZaloPopups, ZaloOpenButton } from './ZaloPopup';
+import { isOpened, markOpened, normalizeCode } from '../lib/unlock';
 import { AiDisclaimer } from './AiDisclaimer';
 
-// Trang /ketqua: hiện báo cáo từ kết quả khảo sát /bando đã lưu NGAY TRÊN MÁY người dùng
-// (hoặc từ link riêng #r=...). Không tra cứu, không gửi dữ liệu đi đâu.
+// Trang /ketqua (link được gửi trong nhóm Zalo): nhập mã báo cáo → so với kết quả khảo sát /bando
+// đã lưu NGAY TRÊN MÁY người dùng → mở báo cáo đầy đủ. Không tra cứu, không gửi dữ liệu đi đâu.
 
-// Làm lại khảo sát: kết quả cũ vẫn giữ cho tới khi gửi khảo sát mới (bản mới sẽ ghi đè)
 const goToBando = () => {
   window.history.pushState({}, '', '/bando');
   window.dispatchEvent(new PopStateEvent('popstate'));
@@ -161,29 +160,16 @@ const TuViChart: React.FC<{ report: Report }> = ({ report }) => {
 
 // ---------- Trang chính ----------
 export const ResultPage: React.FC = () => {
-  const [report] = useState<Report | null>(() => {
-    const input = loadResult();
-    return input ? buildReport(input) : null;
-  });
-  // Ô nhập mật khẩu chỉ có khi mở bằng link kết quả riêng
-  const [fromLink] = useState(openedFromLink);
-  // Bản đầy đủ chỉ mở trong lần xem này (không lưu): tải lại trang là khóa lại.
-  const [unlocked, setUnlocked] = useState(false);
-
-  useEffect(() => {
-    if (!unlocked) return;
-    window.scrollTo({ top: 0 });
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [unlocked]);
+  const [input] = useState(loadResult);
+  const report = useMemo(() => (input ? buildReport(input) : null), [input]);
+  const code = input?.code || '';
+  const [opened, setOpened] = useState(() => isOpened(code));
+  const [typed, setTyped] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, []);
+  }, [opened]);
 
   const shell = (children: React.ReactNode) => (
     <div className="relative min-h-screen w-full text-white font-be-vietnam bg-[#0d0f14]">
@@ -195,68 +181,53 @@ export const ResultPage: React.FC = () => {
     </div>
   );
 
-  // ----- Chưa có kết quả trên máy này -----
-  if (!report) {
-    return shell(
-      <main className="min-h-screen flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md space-y-7 text-center">
-          <header className="space-y-3">
-            <p className={eyebrow}>Dũng Gieo Hạt</p>
-            <h1 className={`text-4xl sm:text-5xl text-white leading-[1.15] ${heading}`}>Kết quả của bạn</h1>
-            <p className="text-base text-white/70 leading-relaxed">
-              Chưa tìm thấy kết quả trên máy này. Kết quả được lưu ngay trên trình duyệt bạn đã dùng để làm khảo sát,
-              hoặc trong link kết quả riêng bạn đã sao chép.
-            </p>
-          </header>
-          <button
-            onClick={goToBando}
-            className="w-full py-4 rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] text-white text-base font-bold tracking-wide transition cursor-pointer"
-          >
-            Làm khảo sát Bản Đồ Hạnh Phúc
-          </button>
-          <p className="text-xs text-white/45 leading-relaxed">
-            Đã làm trên máy khác? Hãy mở link kết quả riêng bạn đã lưu, hoặc làm lại khảo sát trên máy này.
-          </p>
-        </div>
-      </main>
-    );
-  }
+  if (report && opened) return shell(<ReportView report={report} />);
 
-  return shell(unlocked ? <ReportView report={report} full /> : <ReportView report={report} full={false} fromLink={fromLink} onUnlock={() => setUnlocked(true)} />);
-};
-
-// Nút sao chép link kết quả riêng (mở được trên máy khác / gửi qua Zalo)
-const CopyLinkButton: React.FC<{ label?: string }> = ({ label = 'Sao chép link kết quả' }) => {
-  const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle');
-  const [link, setLink] = useState('');
-  const copy = async () => {
-    const input = loadResult();
-    if (!input) return;
-    const url = buildResultLink(input);
-    setLink(url);
-    try {
-      await navigator.clipboard.writeText(url);
-      setState('copied');
-    } catch {
-      setState('manual');
-    }
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const c = normalizeCode(typed);
+    if (c.length !== 7) return setError('Mã báo cáo gồm 7 chữ số, ví dụ 1611482.');
+    if (!report) return setError('Không tìm thấy kết quả trên trình duyệt này. Hãy mở link bằng chính trình duyệt bạn đã dùng để làm khảo sát.');
+    if (c !== code) return setError('Mã chưa đúng. Vui lòng kiểm tra lại mã báo cáo bạn nhận được sau khi làm khảo sát.');
+    markOpened(code);
+    setOpened(true);
   };
-  return (
-    <div className="w-full space-y-2">
-      <button onClick={copy} className="rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] px-5 py-2.5 text-sm font-semibold transition cursor-pointer">
-        {state === 'copied' ? 'Đã sao chép link ✓' : label}
-      </button>
-      {state !== 'idle' && (
-        <p className="text-sm text-white/65 leading-relaxed max-w-[62ch]">
-          {state === 'copied'
-            ? 'Đã sao chép. Hãy dán link này vào tin nhắn gửi chuyên gia trong nhóm Zalo. Link chứa thông tin khảo sát của bạn, chỉ gửi cho chuyên gia.'
-            : 'Không tự sao chép được, bạn hãy chọn và sao chép link dưới đây:'}
-        </p>
-      )}
-      {state === 'manual' && (
-        <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="w-full rounded-xl bg-black/40 px-3 py-2 text-xs text-white/80" />
-      )}
-    </div>
+
+  // ----- Nhập mã báo cáo -----
+  return shell(
+    <main className="min-h-screen flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md space-y-7 text-center">
+        <header className="space-y-3">
+          <p className={eyebrow}>Dũng Gieo Hạt</p>
+          <h1 className={`text-4xl sm:text-5xl text-white leading-[1.15] ${heading}`}>Xem kết quả của bạn</h1>
+          <p className="text-base text-white/70 leading-relaxed">
+            Nhập mã báo cáo 7 số bạn nhận được sau khi làm khảo sát Bản Đồ Hạnh Phúc.
+          </p>
+        </header>
+        <form onSubmit={submit} className="space-y-3">
+          <input
+            value={typed}
+            onChange={(e) => { setTyped(e.target.value); setError(''); }}
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={7}
+            placeholder="Mã báo cáo"
+            aria-label="Mã báo cáo"
+            className="w-full rounded-full bg-black/40 px-5 py-4 text-center font-mono text-2xl tracking-[0.3em] text-white placeholder:text-white/35 placeholder:tracking-normal placeholder:font-be-vietnam placeholder:text-base outline-none focus:ring-2 focus:ring-[#FA5B13]"
+          />
+          {error && <p role="alert" className="text-sm text-red-300 leading-relaxed">{error}</p>}
+          <button type="submit" className="w-full py-4 rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] text-white text-base font-bold tracking-wide transition cursor-pointer">
+            Xem kết quả
+          </button>
+        </form>
+        {!report && (
+          <p className="text-sm text-white/50 leading-relaxed">
+            Chưa làm khảo sát?{' '}
+            <button onClick={goToBando} className="font-semibold text-[#FFB48A] underline underline-offset-4 cursor-pointer">Làm khảo sát Bản Đồ Hạnh Phúc</button>
+          </p>
+        )}
+      </div>
+    </main>
   );
 };
 
@@ -403,7 +374,7 @@ const NAV = [
   ['ke-hoach', 'Kế hoạch'],
 ];
 
-const ReportView: React.FC<{ report: Report; full: boolean; fromLink?: boolean; onUnlock?: () => void }> = ({ report: r, full, fromLink = false, onUnlock }) => {
+const ReportView: React.FC<{ report: Report }> = ({ report: r }) => {
   const n = r.numerology;
   const lp = n.lifePath;
   const t = r.tuvi;
@@ -414,7 +385,7 @@ const ReportView: React.FC<{ report: Report; full: boolean; fromLink?: boolean; 
 
   return (
     <>
-      {full && <nav className="sticky top-0 z-30 bg-[#0d0f14]/85 backdrop-blur-md">
+      <nav className="sticky top-0 z-30 bg-[#0d0f14]/85 backdrop-blur-md">
         <div className="max-w-3xl mx-auto px-4 sm:px-8 h-14 flex items-center gap-1 overflow-x-auto">
           <span className={`mr-3 shrink-0 text-lg text-white ${heading}`}>Dũng Gieo Hạt</span>
           {navItems.map(([id, label]) => (
@@ -423,7 +394,7 @@ const ReportView: React.FC<{ report: Report; full: boolean; fromLink?: boolean; 
             </a>
           ))}
         </div>
-      </nav>}
+      </nav>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-8 py-10 sm:py-14 space-y-20">
         <AiDisclaimer className="max-w-[64ch]" />
@@ -449,33 +420,18 @@ const ReportView: React.FC<{ report: Report; full: boolean; fromLink?: boolean; 
                 bánh xe cuộc đời của bạn có {r.wheel.focus.length} lĩnh vực trọng yếu cần chăm sóc kỹ hơn:{' '}
                 {r.wheel.focus.map((f) => `${f.label} (${f.score}/10)`).join(', ')}.
               </p>
-              {full && <a href="#can-chu-y" className="inline-block text-sm sm:text-base font-semibold text-[#FFB48A] hover:text-white underline underline-offset-4 transition">
+              <a href="#can-chu-y" className="inline-block text-sm sm:text-base font-semibold text-[#FFB48A] hover:text-white underline underline-offset-4 transition">
                 Xem phân tích kỹ và cách liên hệ hỗ trợ &rarr;
-              </a>}
+              </a>
             </div>
           )}
-          {full && (
-            <div className="rounded-2xl bg-[#FA5B13]/20 p-5 sm:p-6 space-y-4 max-w-[64ch] print:hidden">
-              <p className="text-base text-white leading-relaxed">
-                <strong className="font-semibold">Mật khẩu chỉ dùng được một lần.</strong> Hãy lưu bản đầy đủ thành file PDF ngay bây giờ.
-                Khi tải lại hoặc rời trang, báo cáo sẽ khóa lại.
-              </p>
-              <button onClick={() => window.print()} className="rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] px-6 py-3 text-sm sm:text-base font-bold transition cursor-pointer">
-                Lưu thành file PDF
-              </button>
-              <p className="text-xs text-white/55">Trong hộp thoại in, chọn “Lưu dưới dạng PDF” (Save as PDF).</p>
-            </div>
-          )}
+          <div className="flex flex-wrap gap-3 pt-2 print:hidden">
+            <button onClick={() => window.print()} className="rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] px-5 py-2.5 text-sm font-semibold transition cursor-pointer">
+              Lưu thành file PDF
+            </button>
+          </div>
         </section>
 
-        {!full && (
-          <>
-            <TeaserTuVi report={r} />
-            <LockedPanel code={r.code || ''} fromLink={fromLink} onUnlock={onUnlock} />
-          </>
-        )}
-
-        {full && <>
 
         {/* TỬ VI */}
         <Section id="tu-vi" label="Phần 1" title="Tử vi & Bản mệnh" intro="Tính theo âm lịch và 60 hoa giáp; phần lá số lập theo tháng, ngày, giờ sinh. Nội dung mang tính tham khảo, giúp bạn hiểu thêm xu hướng của bản thân.">
@@ -1057,8 +1013,6 @@ const ReportView: React.FC<{ report: Report; full: boolean; fromLink?: boolean; 
           <p className="text-[15px] text-white/75 leading-relaxed">{r.plan.yearNote}</p>
         </Section>
 
-        </>}
-
         {/* Bước cuối: cửa sổ vào nhóm Zalo Gieo Hạt (tự mở khi đọc đến cuối trang) */}
         <div className="text-center"><ZaloOpenButton /></div>
         <ZaloPopups />
@@ -1070,112 +1024,5 @@ const ReportView: React.FC<{ report: Report; full: boolean; fromLink?: boolean; 
         </footer>
       </main>
     </>
-  );
-};
-
-// ---------- Bản xem trước (chưa mở khóa) ----------
-const TeaserTuVi: React.FC<{ report: Report }> = ({ report: r }) => {
-  const t = r.tuvi;
-  const lp = r.numerology.lifePath;
-  return (
-    <section className="space-y-6">
-      <p className={eyebrow}>Xem trước</p>
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <span className={`text-4xl sm:text-5xl text-white ${heading}`}>{t.canChi}</span>
-        <span className="text-sm text-white/60">{t.lunarText} · {t.amDuong}</span>
-      </div>
-      <div className={`${soft} space-y-3`}>
-        <p className={eyebrow}>Nạp âm</p>
-        <p className={`text-2xl sm:text-3xl text-[#FFA877] ${heading}`}>{t.napAm.name} <span className="text-white/60 text-lg">· mệnh {t.napAm.hanh}</span></p>
-        <p className="text-[15px] sm:text-base text-white/85 leading-relaxed line-clamp-3">{t.napAm.text}</p>
-      </div>
-      <div className={`${soft} space-y-2`}>
-        <p className={eyebrow}>Con số chủ đạo</p>
-        <p className={`text-4xl text-white ${heading}`}>{lp.value} <span className="text-xl text-white/70">· {lp.title}</span></p>
-      </div>
-    </section>
-  );
-};
-
-const LOCKED_PARTS = [
-  'Lá số tử vi đầy đủ 12 cung & đại vận',
-  'Thần số học: tài năng, bài học, các giai đoạn đời',
-  'Phân tích Bánh xe cuộc đời & lĩnh vực cần chú ý',
-  'Gia đình: mức hòa hợp với từng người thân',
-  'Kế hoạch 30 ngày dành riêng cho bạn',
-];
-
-const LockedPanel: React.FC<{ code: string; fromLink: boolean; onUnlock?: () => void }> = ({ code, fromLink, onUnlock }) => {
-  const [pw, setPw] = useState('');
-  const [error, setError] = useState('');
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = tryUnlock(code, pw);
-    if (res === 'ok') onUnlock?.();
-    else if (res === 'used') setError('Mật khẩu này đã được dùng trên trình duyệt này. Vui lòng nhắn chuyên gia để nhận mật khẩu mới.');
-    else setError('Mật khẩu chưa đúng. Vui lòng kiểm tra lại 6 số chuyên gia đã gửi.');
-  };
-  return (
-    <section className="space-y-8">
-      <div className="space-y-3">
-        <p className={eyebrow}>Bản đầy đủ đang được khóa</p>
-        <h2 className={`text-3xl sm:text-4xl text-white leading-tight ${heading}`}>Mở khóa toàn bộ bản đồ của bạn</h2>
-      </div>
-      <ul className="space-y-2.5">
-        {LOCKED_PARTS.map((p) => (
-          <li key={p} className="flex items-center gap-3 rounded-xl bg-white/[0.05] px-4 py-3 text-[15px] text-white/75">
-            <span aria-hidden className="text-[#FFA877]">🔒</span>
-            {p}
-          </li>
-        ))}
-      </ul>
-
-      <div className={`${soft} space-y-2 text-center`}>
-        <p className="text-sm text-white/60">Mã báo cáo của bạn</p>
-        <p className="font-mono text-4xl sm:text-5xl font-bold tracking-[0.2em] text-white">{code}</p>
-      </div>
-
-      <ol className="space-y-6">
-        <li className="space-y-3">
-          <p className="text-base text-white"><span className="font-bold text-[#FA5B13] mr-2">1</span>Sao chép link kết quả của bạn</p>
-          <CopyLinkButton />
-        </li>
-        <li className="space-y-3">
-          <p className="text-base text-white leading-relaxed">
-            <span className="font-bold text-[#FA5B13] mr-2">2</span>
-            Vào nhóm Zalo, nhắn cho chuyên gia <strong>Bùi Trung Dũng</strong> mã <strong className="font-mono">{code}</strong> và link vừa sao chép để nhận mật khẩu.
-          </p>
-          <a href={ZALO_GROUP_LINK} target="_blank" rel="noopener noreferrer"
-            className="inline-block rounded-full bg-[#0068FF] hover:bg-[#0058d6] px-5 py-2.5 text-sm font-semibold transition">
-            Vào nhóm Zalo
-          </a>
-        </li>
-        <li className="space-y-3">
-          <p className="text-base text-white leading-relaxed">
-            <span className="font-bold text-[#FA5B13] mr-2">3</span>
-            {fromLink
-              ? 'Nhập mật khẩu chuyên gia đã gửi để xem bản đầy đủ và lưu file PDF. Mật khẩu chỉ dùng được một lần.'
-              : 'Khi nhận được mật khẩu, hãy mở link kết quả bạn đã sao chép ở bước 1 và nhập mật khẩu tại đó để xem bản đầy đủ, lưu file PDF.'}
-          </p>
-          {fromLink && <form onSubmit={submit} className="flex flex-col sm:flex-row gap-3 max-w-md">
-            <input
-              value={pw}
-              onChange={(e) => { setPw(e.target.value); setError(''); }}
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={6}
-              placeholder="Mật khẩu 6 số"
-              aria-label="Mật khẩu mở khóa"
-              className="flex-1 rounded-full bg-black/40 px-5 py-3 text-base tracking-widest text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-[#FA5B13]"
-            />
-            <button type="submit" className="rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] px-6 py-3 text-base font-bold transition cursor-pointer">
-              Mở khóa
-            </button>
-          </form>
-          }
-          {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
-        </li>
-      </ol>
-    </section>
   );
 };

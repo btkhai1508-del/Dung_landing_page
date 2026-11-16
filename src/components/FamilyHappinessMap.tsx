@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { saveResult, hasSavedResult } from '../lib/savedResult';
+import { saveResult, hasSavedResult, loadResult } from '../lib/savedResult';
+import { isPrivateMode } from '../lib/privateMode';
+import { ZALO_GROUP_LINK } from './ZaloPopup';
 import { newReportCode } from '../lib/unlock';
 import { trackEvent } from '../lib/analytics';
 import type { ReportInput } from '../lib/report';
@@ -180,39 +182,78 @@ const BTN_BACK =
 const BTN_PRIMARY =
   'flex-1 sm:flex-none min-h-[52px] px-5 sm:px-9 py-3.5 bg-[#FA5B13] hover:bg-[#DD4900] text-white font-bold rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-lg shadow-[#FA5B13]/30 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed';
 
-// Mỗi trình duyệt chỉ làm khảo sát 1 lần: đã có kết quả → chỉ cho xem lại kết quả.
+// Mỗi trình duyệt chỉ làm khảo sát 1 lần; tab ẩn danh không được làm.
 export const FamilyHappinessMap: React.FC = () => {
-  const [done] = useState(hasSavedResult);
-  return done ? <AlreadyDone /> : <SurveyForm />;
+  const [status, setStatus] = useState<'checking' | 'private' | 'done' | 'form'>(() => (hasSavedResult() ? 'done' : 'checking'));
+
+  useEffect(() => {
+    if (status !== 'checking') return;
+    let alive = true;
+    isPrivateMode().then((priv) => alive && setStatus(priv ? 'private' : 'form'));
+    return () => {
+      alive = false;
+    };
+  }, [status]);
+
+  if (status === 'checking') return <div className="min-h-screen w-full bg-[#0d0f14]" />;
+  if (status === 'private') return <PrivateBlocked />;
+  if (status === 'done') return <SurveyDone />;
+  return <SurveyForm onDone={() => setStatus('done')} />;
 };
 
-const goToKetqua = () => {
-  window.history.pushState({}, '', '/ketqua');
-  window.dispatchEvent(new PopStateEvent('popstate'));
-  window.scrollTo({ top: 0 });
-};
-
-const AlreadyDone: React.FC = () => (
+const NoticeShell: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="relative min-h-screen w-full text-white font-be-vietnam bg-[#0d0f14] flex items-center justify-center px-4 py-12">
     <div className="w-full max-w-md space-y-7 text-center">
       <header className="space-y-3">
         <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-[#FFA877]">Bản Đồ Hạnh Phúc</p>
-        <h1 className="text-4xl sm:text-5xl text-white leading-[1.15] font-playfair-heading italic font-medium">Bạn đã làm khảo sát</h1>
-        <p className="text-base text-white/70 leading-relaxed">
-          Mỗi người chỉ làm khảo sát một lần. Kết quả của bạn đã được lưu trên trình duyệt này.
-        </p>
+        <h1 className="text-4xl sm:text-5xl text-white leading-[1.15] font-playfair-heading italic font-medium">{title}</h1>
       </header>
-      <button
-        onClick={goToKetqua}
-        className="w-full py-4 rounded-full bg-[#FA5B13] hover:bg-[#e24f0d] text-white text-base font-bold tracking-wide transition cursor-pointer"
-      >
-        Xem kết quả của bạn
-      </button>
+      {children}
     </div>
   </div>
 );
 
-const SurveyForm: React.FC = () => {
+const PrivateBlocked: React.FC = () => (
+  <NoticeShell title="Không hỗ trợ tab ẩn danh">
+    <p className="text-base text-white/70 leading-relaxed">
+      Kết quả khảo sát được lưu ngay trên trình duyệt của bạn, nên không thể làm trong tab ẩn danh / riêng tư.
+      Vui lòng mở lại trang này bằng cửa sổ trình duyệt thông thường.
+    </p>
+  </NoticeShell>
+);
+
+// Làm xong (hoặc đã làm trước đó): hiện mã báo cáo + mời vào nhóm Zalo, nơi có link xem kết quả.
+const SurveyDone: React.FC = () => {
+  const code = loadResult()?.code || '';
+  return (
+    <NoticeShell title="Bạn đã hoàn thành khảo sát">
+      <p className="text-base text-white/70 leading-relaxed">
+        Mỗi người chỉ làm khảo sát một lần. Kết quả của bạn đã được lưu trên trình duyệt này.
+      </p>
+      {code && (
+        <div className="rounded-2xl bg-white/[0.06] p-6 space-y-2">
+          <p className="text-sm text-white/60">Mã báo cáo của bạn</p>
+          <p className="font-mono text-4xl sm:text-5xl font-bold tracking-[0.2em] text-white">{code}</p>
+          <p className="text-xs text-white/50">Hãy chụp màn hình hoặc ghi lại mã này.</p>
+        </div>
+      )}
+      <ol className="space-y-3 text-left text-[15px] text-white/80 leading-relaxed">
+        <li><span className="font-bold text-[#FA5B13] mr-2">1</span>Vào nhóm Zalo Gieo Hạt để nhận link xem kết quả.</li>
+        <li><span className="font-bold text-[#FA5B13] mr-2">2</span>Mở link bằng <strong>chính trình duyệt này</strong> và nhập mã báo cáo để xem bản đồ đầy đủ.</li>
+      </ol>
+      <a
+        href={ZALO_GROUP_LINK}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block w-full py-4 rounded-full bg-[#0068FF] hover:bg-[#0058d6] text-white text-base font-bold tracking-wide transition"
+      >
+        Vào nhóm Zalo để nhận link kết quả
+      </a>
+    </NoticeShell>
+  );
+};
+
+const SurveyForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<FormData>(INITIAL_DATA);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -379,8 +420,8 @@ const SurveyForm: React.FC = () => {
     saveResult(input);
     trackEvent('generate_lead', { form_name: 'bando' });
     setIsSubmitting(false);
-    window.history.pushState({}, '', '/ketqua');
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.scrollTo({ top: 0 });
+    onDone();
   };
 
   const addRelative = () => {
